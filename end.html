@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Minecraft - L’End</title>
+  <link rel="stylesheet" href="weapons/inventory.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      font-family: 'Press Start 2P', monospace;
+      background: #100b1b;
+    }
+
+    #end-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .split-camera-divider {
+      position: absolute;
+      z-index: 20;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 4px;
+      transform: translateX(-50%);
+      background: rgba(231, 202, 255, 0.9);
+      box-shadow: 0 0 12px rgba(161, 94, 214, 0.8);
+      pointer-events: none;
+    }
+
+    .menu {
+      position: absolute;
+      z-index: 30;
+      top: 14px;
+      right: 14px;
+    }
+
+    .menu-toggle,
+    .button {
+      font-family: 'Press Start 2P', monospace;
+      color: #f0e9ff;
+      background: rgba(22, 16, 34, 0.94);
+      border: 3px solid #7953a8;
+      box-shadow: 0 5px 12px rgba(0, 0, 0, 0.5);
+      cursor: pointer;
+    }
+
+    .menu-toggle {
+      padding: 11px 16px;
+      font-size: 10px;
+    }
+
+    .panel {
+      position: absolute;
+      top: calc(100% + 8px);
+      right: 0;
+      width: min(330px, calc(100vw - 20px));
+      max-height: calc(100vh - 150px);
+      max-height: calc(100dvh - 150px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      padding: 10px 12px;
+      color: #f0e9ff;
+      background: rgba(22, 16, 34, 0.94);
+      border: 3px solid #50376f;
+      font-size: 7.5px;
+      line-height: 1.7;
+      box-shadow: 0 6px 15px rgba(0, 0, 0, 0.55);
+    }
+
+    .panel[hidden] {
+      display: none;
+    }
+
+    .panel-title {
+      margin-bottom: 8px;
+      color: #d3a8ff;
+    }
+
+    .button {
+      width: 100%;
+      margin-top: 12px;
+      padding: 10px;
+      font-size: 8px;
+      line-height: 1.6;
+      text-align: left;
+    }
+
+    .world-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+
+    .world-option input {
+      accent-color: #b48be2;
+    }
+
+    .world-option input[type="number"] {
+      width: 58px;
+      margin-left: auto;
+      padding: 4px;
+    }
+
+    .button:hover,
+    .menu-toggle:hover,
+    .menu-toggle[aria-expanded="true"] {
+      background: #392650;
+    }
+
+    .button:disabled {
+      opacity: 0.65;
+      cursor: wait;
+    }
+
+    .dialogue {
+      position: absolute;
+      z-index: 25;
+      bottom: 28px;
+      left: 50%;
+      width: min(760px, calc(100vw - 28px));
+      transform: translateX(-50%);
+      padding: 14px 18px;
+      color: #f7eaff;
+      background: rgba(22, 16, 34, 0.94);
+      border: 2px solid #a35bd1;
+      box-shadow: 0 6px 18px rgba(0, 0, 0, 0.55);
+      font-size: 9px;
+      line-height: 1.9;
+      text-align: center;
+    }
+
+    .dialogue[hidden] {
+      display: none;
+    }
+
+    .status {
+      position: absolute;
+      z-index: 2;
+      bottom: 96px;
+      left: 50%;
+      transform: translateX(-50%);
+      max-width: calc(100vw - 28px);
+      padding: 12px 16px;
+      color: #f0e9ff;
+      background: rgba(22, 16, 34, 0.88);
+      border: 2px solid #50376f;
+      font-size: 9px;
+      text-align: center;
+      line-height: 1.8;
+      white-space: nowrap;
+    }
+
+    @media (max-width: 600px) {
+      .status {
+        bottom: 90px;
+        white-space: normal;
+        font-size: 7px;
+      }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="weapons/weapon-motion.js"></script>
+  <script src="characters/character-model.js"></script>
+  <script src="characters/alex.js"></script>
+  <script src="characters/steve.js"></script>
+  <script src="ender-dragon.js"></script>
+</head>
+<body>
+  <div class="menu">
+    <button class="menu-toggle" id="menu-toggle" type="button" aria-expanded="false" aria-controls="menu-panel">Menu</button>
+    <div class="panel" id="menu-panel" hidden>
+      <div class="panel-title">BIENVENUE DANS L’END</div>
+      <div>Alex et Steve sont arrivés dans le vide noir de l’End : une grande île vert pâle et de petits îlots flottent autour des piliers d’obsidienne.</div>
+      <div style="margin-top: 10px;"><b>ALEX</b> — déplacement : Z Q S D ou flèches ; sauts enchaînés : maintenir V ; sélectionner arme/bloc : R ; poser un bloc ou attaquer : A ; parler : E.</div>
+      <div style="margin-top: 8px;"><b>STEVE</b> — déplacement : O K L M ; sauts enchaînés : maintenir N ; sélectionner arme/bloc : U ; poser un bloc ou attaquer : I ; parler : P.</div>
+      <div style="margin-top: 8px;">En caméras séparées, les touches de côté tournent le personnage par pas réglables ; maintiens-les pour continuer. Glisse dans chaque moitié pour orienter sa caméra.</div>
+      <div style="margin-top: 8px;">Avec le briquet, A/I allume le bois et les feuilles. La TNT détonne après 4 secondes et détruit les blocs dans un rayon de 8 blocs.</div>
+      <div style="margin-top: 8px;">Choisis un bloc dans l’inventaire en bas, puis tourne le personnage vers l’endroit où tu veux le poser.</div>
+      <div style="margin-top: 8px;">Glisser la souris pour pivoter/incliner la caméra ; pincer le trackpad pour zoomer.</div>
+      <label class="world-option" for="infinite-world-toggle">
+        <input id="infinite-world-toggle" type="checkbox">
+        Monde infini
+      </label>
+      <label class="world-option" for="split-camera-toggle">
+        <input id="split-camera-toggle" type="checkbox">
+        Caméras séparées : Alex / Steve
+      </label>
+      <div style="padding-left:20px; color:#cdb8e3;">En écran partagé, glisse la souris dans une moitié pour orienter sa caméra.</div>
+      <label class="world-option" for="split-turn-step">Pas de rotation (°)
+        <input id="split-turn-step" type="number" min="1" max="90" step="1" value="30">
+      </label>
+      <button class="button" id="start-dragon-meeting" type="button">Lancer la rencontre</button>
+      <button class="button" id="return-to-main-world" type="button">Retourner dans le monde normal</button>
+    </div>
+  </div>
+  <canvas id="end-canvas"></canvas>
+  <div class="split-camera-divider" id="split-camera-divider" hidden></div>
+  <div class="dialogue" id="dragon-dialogue" role="status" aria-live="polite" hidden></div>
+
+  <script src="weapons/weapon-preview.js"></script>
+  <script src="weapons/pickaxe.js"></script>
+  <script src="weapons/sword.js"></script>
+  <script src="weapons/axe.js"></script>
+  <script src="weapons/crossbow.js"></script>
+  <script src="weapons/flint-and-steel.js"></script>
+  <script src="blocks/blocks.js"></script>
+  <script src="blocks/grass.js"></script>
+  <script src="blocks/stone.js"></script>
+  <script src="blocks/oak-wood.js"></script>
+  <script src="blocks/oak-planks.js"></script>
+  <script src="blocks/diamond-ore.js"></script>
+  <script src="blocks/gold-block.js"></script>
+  <script src="blocks/bricks.js"></script>
+  <script src="blocks/tnt.js"></script>
+  <script src="blocks/glass.js"></script>
+  <script src="blocks/obsidian.js"></script>
+  <script src="blocks/bookshelf.js"></script>
+  <script src="blocks/magma.js"></script>
+  <script src="blocks/leaves.js"></script>
+  <script src="blocks/block-world.js"></script>
+  <script src="weapons/inventory.js"></script>
+  <script src="shared/character-camera-controls.js"></script>
+  <script>
+    const worldUrlParams = new URLSearchParams(window.location.search);
+    let isInfiniteWorld = worldUrlParams.get('infinite') === 'true';
+    const infiniteWorldToggle = document.getElementById('infinite-world-toggle');
+    infiniteWorldToggle.checked = isInfiniteWorld;
+    infiniteWorldToggle.addEventListener('change', () => {
+      isInfiniteWorld = infiniteWorldToggle.checked;
+      const currentUrl = new URL(window.location.href);
+      currentUrl.searchParams.set('infinite', String(isInfiniteWorld));
+      window.history.replaceState(null, '', currentUrl);
+      if (!isInfiniteWorld) {
+        mainIsland.position.x = 0;
+        mainIsland.position.z = 0;
+        [...pillars, ...islands].forEach((landmark) => {
+          landmark.position.copy(landmark.userData.finitePosition);
+        });
+      }
+    });
+
+    document.getElementById('return-to-main-world').addEventListener('click', () => {
+      const url = new URL('index.html', window.location.href);
+      url.searchParams.set('infinite', String(isInfiniteWorld));
+      window.location.href = url.href;
+    });
+
+    const canvas = document.getElementById('end-canvas');
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x08070a);
+    scene.fog = new THREE.FogExp2(0x08070a, 0.0035);
+
+    const camera = new THREE.PerspectiveCamera(42, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    scene.add(new THREE.HemisphereLight(0xdde8c5, 0x182014, 0.75));
+    const moon = new THREE.DirectionalLight(0xd9e8c6, 1.5);
+    moon.position.set(14, 30, 12);
+    moon.castShadow = true;
+    moon.shadow.mapSize.set(2048, 2048);
+    moon.shadow.camera.left = -48;
+    moon.shadow.camera.right = 48;
+    moon.shadow.camera.top = 48;
+    moon.shadow.camera.bottom = -48;
+    moon.shadow.camera.far = 120;
+    scene.add(moon);
+    scene.add(moon.target);
+
+    function box(parent, width, height, depth, material, x, y, z, castShadow = true) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, depth), material);
+      mesh.position.set(x, y, z);
+      mesh.castShadow = castShadow;
+      mesh.receiveShadow = true;
+      parent.add(mesh);
+      return mesh;
+    }
+
+    moon.intensity = 0.85;
+    const obsidian = new THREE.MeshLambertMaterial({ color: 0x21172c });
+    const crystal = new THREE.MeshBasicMaterial({ color: 0xffc7ff });
+
+    const islandGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const islandPalette = [
+      new THREE.MeshLambertMaterial({ color: 0x9bb684 }),
+      new THREE.MeshLambertMaterial({ color: 0x8da777 }),
+      new THREE.MeshLambertMaterial({ color: 0x7f9868 }),
+      new THREE.MeshLambertMaterial({ color: 0x71875c }),
+      new THREE.MeshLambertMaterial({ color: 0x60764f }),
+      new THREE.MeshLambertMaterial({ color: 0x4e6242 })
+    ];
+
+    function islandNoise(x, z, seed) {
+      const value = Math.sin(x * 127.1 + z * 311.7 + seed * 74.7) * 43758.5453;
+      return value - Math.floor(value);
+    }
+
+    function createVoxelIsland(radiusX, radiusZ, depth, seed, x, y, z) {
+      const island = new THREE.Group();
+      const blocksByColor = islandPalette.map(() => []);
+      for (let blockX = -radiusX; blockX <= radiusX; blockX++) {
+        for (let blockZ = -radiusZ; blockZ <= radiusZ; blockZ++) {
+          const normalizedDistance = Math.sqrt(
+            (blockX * blockX) / (radiusX * radiusX)
+            + (blockZ * blockZ) / (radiusZ * radiusZ)
+          );
+          const edge = 1 + (islandNoise(blockX, blockZ, seed) - 0.5) * 0.12;
+          if (normalizedDistance > edge) continue;
+
+          const surfaceNoise = islandNoise(blockX + 23, blockZ - 17, seed + 1);
+          const surfaceY = normalizedDistance < 0.68 ? 0 : (surfaceNoise > 0.94 ? 1 : 0);
+          for (let layer = 0; layer <= depth; layer++) {
+            const taper = layer === 0 ? 1 : Math.max(0.12, 1 - (layer / (depth + 1)) * 0.82);
+            if (normalizedDistance > edge * taper) continue;
+
+            let colorIndex;
+            if (layer === 0) {
+              colorIndex = Math.floor(islandNoise(blockX, blockZ, seed + 2) * 3);
+            } else if (layer < depth * 0.45) {
+              colorIndex = 2 + Math.floor(islandNoise(blockX, blockZ, seed + layer) * 2);
+            } else {
+              colorIndex = 4 + Math.floor(islandNoise(blockX, blockZ, seed + layer) * 2);
+            }
+            blocksByColor[colorIndex].push({
+              x: blockX,
+              y: surfaceY - layer - 0.5,
+              z: blockZ
+            });
+          }
+        }
+      }
+
+      const transform = new THREE.Object3D();
+      blocksByColor.forEach((positions, colorIndex) => {
+        if (!positions.length) return;
+        const mesh = new THREE.InstancedMesh(islandGeometry, islandPalette[colorIndex], positions.length);
+        positions.forEach((position, index) => {
+          transform.position.set(position.x, position.y, position.z);
+          transform.updateMatrix();
+          mesh.setMatrixAt(index, transform.matrix);
+        });
+        mesh.instanceMatrix.needsUpdate = true;
+        mesh.castShadow = false;
+        mesh.receiveShadow = true;
+        island.add(mesh);
+      });
+
+      island.position.set(x, y, z);
+      scene.add(island);
+      return island;
+    }
+
+    const mainIsland = createVoxelIsland(46, 38, 8, 31, 0, 0, 0);
+    mainIsland.userData.finitePosition = mainIsland.position.clone();
+    const finiteIslandRadiusX = 43;
+    const finiteIslandRadiusZ = 35;
+
+    const collisionObstacles = [];
+    const pillars = [];
+    for (let i = 0; i < 10; i++) {
+      const angle = (i / 10) * Math.PI * 2;
+      const radius = 25 + (i % 3) * 5;
+      const height = 13 + (i % 4) * 5;
+      const pillar = new THREE.Group();
+      const x = Math.sin(angle) * radius;
+      const z = Math.cos(angle) * radius;
+      box(pillar, 4.5, height, 4.5, obsidian, 0, height / 2, 0);
+      box(pillar, 5.2, 0.8, 5.2, obsidian, 0, height + 0.2, 0);
+      const glow = new THREE.PointLight(0xc74fff, 2, 18);
+      glow.position.set(0, height + 1.1, 0);
+      pillar.add(glow);
+      box(pillar, 0.7, 0.7, 0.7, crystal, 0, height + 1.1, 0);
+      pillar.position.set(x, 0, z);
+      pillar.userData.finitePosition = pillar.position.clone();
+      scene.add(pillar);
+      pillars.push(pillar);
+      collisionObstacles.push({ position: pillar.position, halfWidth: 2.6, halfDepth: 2.6 });
+    }
+
+    const islands = [];
+    for (let i = 0; i < 14; i++) {
+      const angle = (i / 14) * Math.PI * 2;
+      const radius = 78 + (i % 5) * 19;
+      const island = createVoxelIsland(
+        6 + (i % 3) * 2,
+        5 + (i % 4) * 2,
+        4 + (i % 3),
+        100 + i,
+        Math.sin(angle) * radius,
+        2 - (i % 5) * 2,
+        Math.cos(angle) * radius
+      );
+      island.userData.finitePosition = island.position.clone();
+      islands.push(island);
+    }
+
+    const alex = window.MinecraftCharacters.createAlex(THREE);
+    alex.root.position.x = -1.15;
+    scene.add(alex.root);
+    const steve = window.MinecraftCharacters.createSteve(THREE);
+    steve.root.position.x = 1.15;
+    scene.add(steve.root);
+    window.MinecraftWeaponsInventory.setCharacters(alex, steve);
+    const enderDragon = window.EnderDragon.create(THREE);
+    scene.add(enderDragon);
+    window.MinecraftBlockWorld.setupBlockInteraction(
+      THREE, scene, camera, canvas, collisionObstacles, alex, steve
+    );
+
+    const meetingButton = document.getElementById('start-dragon-meeting');
+    const dragonDialogue = document.getElementById('dragon-dialogue');
+    const dragonLine = "À l'aide ! Mon œuf a été volé pendant que je surveillais mes cristaux. J'ai besoin de votre aide en échange d'une partie de mon trésor !";
+    const meetingTargets = {
+      alex: new THREE.Vector3(-2.4, 0, 1.2),
+      steve: new THREE.Vector3(2.4, 0, 1.2)
+    };
+    let meetingActive = false;
+    let meetingSpeechStarted = false;
+    let resumeDragonAfterMovement = false;
+    let postDialogueCharacterPositions = null;
+
+    function finishDragonDialogue() {
+      meetingActive = false;
+      resumeDragonAfterMovement = true;
+      postDialogueCharacterPositions = {
+        alex: alex.root.position.clone(),
+        steve: steve.root.position.clone()
+      };
+      meetingButton.disabled = false;
+      meetingButton.textContent = 'Rejouer la rencontre';
+      setTimeout(() => { dragonDialogue.hidden = true; }, 2200);
+    }
+
+    function startDragonDialogue() {
+      if (meetingSpeechStarted) return;
+      meetingSpeechStarted = true;
+      dragonDialogue.textContent = `ENDER DRAGON : « ${dragonLine} »`;
+      dragonDialogue.hidden = false;
+      if (!window.speechSynthesis || !window.SpeechSynthesisUtterance) {
+        setTimeout(finishDragonDialogue, 7000);
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(dragonLine);
+      utterance.lang = 'fr-FR';
+      utterance.rate = 0.92;
+      utterance.pitch = 0.72;
+      utterance.onend = finishDragonDialogue;
+      utterance.onerror = finishDragonDialogue;
+      window.speechSynthesis.speak(utterance);
+    }
+
+    function moveCharacterToMeetingPoint(character, destination, otherCharacter, delta, time) {
+      const dx = destination.x - character.root.position.x;
+      const dz = destination.z - character.root.position.z;
+      const distance = Math.hypot(dx, dz);
+      const moving = distance > 0.08;
+      character.isMoving = moving;
+
+      if (moving) {
+        character.root.rotation.y = Math.atan2(dx, dz);
+        const frameStep = Math.min(2.8 * delta, distance);
+        window.MinecraftCharacterModel.moveWithCollisions(
+          character,
+          (dx / distance) * frameStep,
+          (dz / distance) * frameStep,
+          collisionObstacles,
+          otherCharacter
+        );
+        const walk = Math.sin(time * 12) * 0.62;
+        character.leftLegPivot.rotation.x = walk;
+        character.rightLegPivot.rotation.x = -walk;
+        character.leftArmPivot.rotation.x = -walk * 0.8;
+        character.rightArmPivot.rotation.x = walk * 0.8;
+      } else {
+        character.leftLegPivot.rotation.x = 0;
+        character.rightLegPivot.rotation.x = 0;
+        character.leftArmPivot.rotation.x = 0;
+        character.rightArmPivot.rotation.x = 0;
+        character.root.rotation.y = Math.atan2(
+          enderDragon.position.x - character.root.position.x,
+          enderDragon.position.z - character.root.position.z
+        );
+      }
+      return !moving;
+    }
+
+    function updateMeetingCharacters(delta, time) {
+      const alexArrived = moveCharacterToMeetingPoint(alex, meetingTargets.alex, steve, delta, time);
+      const steveArrived = moveCharacterToMeetingPoint(steve, meetingTargets.steve, alex, delta, time);
+      return alexArrived && steveArrived;
+    }
+
+    meetingButton.addEventListener('click', () => {
+      if (meetingActive) return;
+      meetingActive = true;
+      meetingSpeechStarted = false;
+      resumeDragonAfterMovement = false;
+      postDialogueCharacterPositions = null;
+      meetingButton.disabled = true;
+      meetingButton.textContent = 'La rencontre commence…';
+      dragonDialogue.hidden = true;
+      menuToggle.setAttribute('aria-expanded', 'false');
+      menuPanel.hidden = true;
+      enderDragon.userData.startConversation();
+    });
+
+    const keys = {};
+    let camOrbit = 0;
+    let cameraPitch = 0.08;
+    let cameraDistance = 9;
+    let currentDistance = 9;
+    const target = new THREE.Vector3(0, 1, 0);
+    let isSplitCameraMode = false;
+    const cameraControls = window.MinecraftCharacterCameraControls.create({
+      THREE,
+      renderer,
+      canvas,
+      characters: { alex, steve },
+      collisionObstacles,
+      splitToggle: document.getElementById('split-camera-toggle'),
+      divider: document.getElementById('split-camera-divider'),
+      turnStepInput: document.getElementById('split-turn-step'),
+      onModeChange: (enabled) => { isSplitCameraMode = enabled; },
+      onSingleDrag: (deltaX, deltaY) => {
+        camOrbit -= deltaX * 0.005;
+        cameraPitch = Math.max(-0.15, Math.min(1.05, cameraPitch + deltaY * 0.005));
+      }
+    });
+    let arrivedAt = performance.now();
+
+    const menuToggle = document.getElementById('menu-toggle');
+    const menuPanel = document.getElementById('menu-panel');
+    menuToggle.addEventListener('click', () => {
+      const open = menuToggle.getAttribute('aria-expanded') !== 'true';
+      menuToggle.setAttribute('aria-expanded', String(open));
+      menuPanel.hidden = !open;
+    });
+    document.addEventListener('click', (event) => {
+      if (!event.target.closest('.menu')) {
+        menuToggle.setAttribute('aria-expanded', 'false');
+        menuPanel.hidden = true;
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        menuToggle.setAttribute('aria-expanded', 'false');
+        menuPanel.hidden = true;
+      }
+    });
+
+    window.addEventListener('wheel', (event) => {
+      if (event.target.closest('.panel')) return;
+      event.preventDefault();
+      cameraDistance = Math.max(5, Math.min(18, cameraDistance * Math.exp(event.deltaY * 0.003)));
+    }, { passive: false });
+
+    window.addEventListener('keydown', (event) => {
+      const key = event.key.toLowerCase();
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) event.preventDefault();
+      if (!event.repeat && key === 'v') window.MinecraftCharacterModel.startJump(alex, collisionObstacles);
+      if (!event.repeat && key === 'n') window.MinecraftCharacterModel.startJump(steve, collisionObstacles);
+      keys[key] = true;
+    });
+    window.addEventListener('keyup', (event) => {
+      const key = event.key.toLowerCase();
+      keys[key] = false;
+      if (key === 'v') window.MinecraftCharacterModel.stopJump(alex);
+      if (key === 'n') window.MinecraftCharacterModel.stopJump(steve);
+    });
+    window.addEventListener('blur', () => {
+      Object.keys(keys).forEach((key) => { keys[key] = false; });
+      window.MinecraftCharacterModel.stopJump(alex);
+      window.MinecraftCharacterModel.stopJump(steve);
+    });
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const delta = clock.getDelta();
+      const time = clock.getElapsedTime();
+      const speed = 4.2 * delta;
+      window.MinecraftBlockWorld.update(delta, time);
+      window.MinecraftCharacterModel.updateJump(alex, delta, collisionObstacles);
+      window.MinecraftCharacterModel.updateJump(steve, delta, collisionObstacles);
+
+      function moveCharacter(character, directions, actions) {
+        const { root, headPivot, arms, legs } = character;
+        const name = character === alex ? 'alex' : 'steve';
+        const moving = cameraControls.move(name, {
+          left: keys[directions.left] || (directions.arrows && keys.arrowleft),
+          right: keys[directions.right] || (directions.arrows && keys.arrowright),
+          forward: keys[directions.up] || (directions.arrows && keys.arrowup),
+          backward: keys[directions.down] || (directions.arrows && keys.arrowdown),
+          orbit: camOrbit,
+          delta,
+          speed
+        });
+        const walk = moving ? Math.sin(time * 13) * 0.72 : 0;
+        legs[0].rotation.x = walk;
+        legs[1].rotation.x = -walk;
+        const armsRaised = keys[actions.raise] && !character.weaponConfig;
+        arms[0].rotation.x = armsRaised ? -1.95 : moving ? -walk * 0.9 : 0;
+        arms[1].rotation.x = armsRaised ? -1.95 : moving ? walk * 0.9 : 0;
+        arms[0].rotation.z = armsRaised ? -0.32 : 0;
+        arms[1].rotation.z = armsRaised ? 0.32 : 0;
+        headPivot.rotation.x = keys[actions.nod] ? 0.42 + Math.sin(time * 9) * 0.04 : 0;
+        return moving;
+      }
+
+      const meetingCharactersArrived = meetingActive
+        ? updateMeetingCharacters(delta, time)
+        : false;
+      if (!meetingActive) {
+        moveCharacter(alex, { left: 'q', right: 'd', up: 'z', down: 's', arrows: true }, { raise: 'a', nod: 'e' });
+        moveCharacter(steve, { left: 'k', right: 'm', up: 'o', down: 'l' }, { raise: 'i', nod: 'p' });
+      }
+      window.MinecraftCharacterModel.updateWeaponArm(alex, delta, time);
+      window.MinecraftCharacterModel.updateWeaponArm(steve, delta, time);
+
+      const dx = alex.root.position.x - steve.root.position.x;
+      const dz = alex.root.position.z - steve.root.position.z;
+      const separation = Math.hypot(dx, dz);
+      if (!isSplitCameraMode && separation > 16) {
+        const correction = (separation - 16) / separation;
+        window.MinecraftCharacterModel.moveWithCollisions(
+          alex, -dx * correction / 2, -dz * correction / 2, collisionObstacles
+        );
+        window.MinecraftCharacterModel.moveWithCollisions(
+          steve, dx * correction / 2, dz * correction / 2, collisionObstacles
+        );
+      }
+
+      if (!isInfiniteWorld) {
+        [alex, steve].forEach((character) => {
+          const islandDistance = Math.hypot(
+            character.root.position.x / finiteIslandRadiusX,
+            character.root.position.z / finiteIslandRadiusZ
+          );
+          if (islandDistance > 1) {
+            character.root.position.x /= islandDistance;
+            character.root.position.z /= islandDistance;
+          }
+        });
+      }
+
+      if (resumeDragonAfterMovement && postDialogueCharacterPositions) {
+        const alexMoved = alex.root.position.distanceTo(postDialogueCharacterPositions.alex) > 0.12;
+        const steveMoved = steve.root.position.distanceTo(postDialogueCharacterPositions.steve) > 0.12;
+        if (alexMoved || steveMoved) {
+          resumeDragonAfterMovement = false;
+          postDialogueCharacterPositions = null;
+          enderDragon.userData.resumeRandomFlight(target.x, target.z);
+        }
+      }
+
+      target.x += ((alex.root.position.x + steve.root.position.x) / 2 - target.x) * (1 - Math.exp(-5 * delta));
+      target.z += ((alex.root.position.z + steve.root.position.z) / 2 - target.z) * (1 - Math.exp(-5 * delta));
+      enderDragon.userData.update(time, delta, target.x, target.z);
+      if (meetingActive && !meetingSpeechStarted && meetingCharactersArrived
+        && enderDragon.userData.isReadyToTalk(target.x, target.z)) {
+        startDragonDialogue();
+      }
+      const dragonDistance = Math.hypot(
+        enderDragon.position.x - target.x,
+        enderDragon.position.z - target.z
+      );
+      const dragonFraming = 1 - THREE.MathUtils.clamp((dragonDistance - 16) / 14, 0, 1);
+      const desiredTargetHeight = 1 + dragonFraming * 4.2;
+      target.y += (desiredTargetHeight - target.y) * (1 - Math.exp(-3 * delta));
+      const cameraTargetX = target.x + (enderDragon.position.x - target.x) * dragonFraming * 0.12;
+      const cameraTargetZ = target.z + (enderDragon.position.z - target.z) * dragonFraming * 0.12;
+      const horizontalFov = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect);
+      const framingDistance = Math.max(
+        8,
+        (separation + 2.4) / (2 * Math.tan(horizontalFov / 2) * 0.78),
+        dragonFraming * 27
+      );
+      currentDistance += (Math.max(cameraDistance, framingDistance) - currentDistance) * (1 - Math.exp(-4 * delta));
+      const horizontal = Math.cos(cameraPitch) * currentDistance;
+      camera.position.set(
+        cameraTargetX + Math.sin(camOrbit) * horizontal,
+        target.y + Math.sin(cameraPitch) * currentDistance,
+        cameraTargetZ + Math.cos(camOrbit) * horizontal
+      );
+      camera.lookAt(cameraTargetX, target.y, cameraTargetZ);
+
+      if (isInfiniteWorld) {
+        mainIsland.position.x = target.x;
+        mainIsland.position.z = target.z;
+      }
+      moon.target.position.set(target.x, 0, target.z);
+      moon.position.set(target.x + 14, 30, target.z + 12);
+      if (isInfiniteWorld) {
+        pillars.forEach((pillar, index) => {
+          const angle = (index / pillars.length) * Math.PI * 2;
+          const radius = 25 + (index % 3) * 5;
+          pillar.position.set(target.x + Math.sin(angle) * radius, 0, target.z + Math.cos(angle) * radius);
+        });
+        islands.forEach((island, index) => {
+          const angle = (index / islands.length) * Math.PI * 2;
+          const radius = 78 + (index % 5) * 19;
+          island.position.x = target.x + Math.sin(angle) * radius;
+          island.position.z = target.z + Math.cos(angle) * radius;
+        });
+      }
+
+      if (!cameraControls.render(scene, window.innerWidth, window.innerHeight, delta)) {
+        renderer.setScissorTest(false);
+        renderer.setViewport(0, 0, window.innerWidth, window.innerHeight);
+        renderer.render(scene, camera);
+      }
+    }
+
+    animate();
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+  </script>
+</body>
+</html>

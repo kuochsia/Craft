@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Éditeur d’armes pixelisées</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, sans-serif;
+      background: #17131d;
+      color: #f2edf8;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      padding: 24px;
+    }
+
+    main {
+      display: grid;
+      grid-template-columns: minmax(290px, 430px) minmax(300px, 1fr);
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      grid-column: 1 / -1;
+      margin: 0;
+      font-size: clamp(22px, 4vw, 32px);
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 18px;
+    }
+
+    .card {
+      min-width: 0;
+      padding: 18px;
+      border: 1px solid #554764;
+      border-radius: 8px;
+      background: #241e2d;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    label {
+      display: grid;
+      gap: 5px;
+      font-size: 13px;
+    }
+
+    select,
+    button,
+    input[type="color"] {
+      min-height: 38px;
+      border: 1px solid #79658f;
+      border-radius: 4px;
+      background: #17131d;
+      color: inherit;
+    }
+
+    select,
+    button {
+      padding: 8px 11px;
+      font: inherit;
+    }
+
+    input[type="color"] {
+      width: 52px;
+      padding: 3px;
+      cursor: pointer;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #3a2d49;
+    }
+
+    .palette {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+      margin: 10px 0 15px;
+    }
+
+    .swatch {
+      width: 27px;
+      height: 27px;
+      min-height: 27px;
+      padding: 0;
+      border: 2px solid #b7adbf;
+    }
+
+    .swatch.active {
+      outline: 2px solid #f4d35e;
+      outline-offset: 2px;
+    }
+
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    .image-import {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 9px;
+      margin-bottom: 14px;
+      padding: 10px;
+      border: 1px solid #554764;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .image-import input {
+      max-width: 100%;
+      font: inherit;
+    }
+
+    .tools label {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      min-height: 38px;
+      padding: 0 9px;
+      border: 1px solid #554764;
+      border-radius: 4px;
+    }
+
+    .marker-tool.active {
+      border-color: #f4d35e;
+      box-shadow: 0 0 0 2px #f4d35e;
+    }
+
+    .grid-wrap {
+      width: min(100%, 400px);
+      aspect-ratio: 1;
+      overflow: hidden;
+      border: 2px solid #79658f;
+      background-color: #ddd;
+      background-image:
+        linear-gradient(45deg, #bbb 25%, transparent 25%),
+        linear-gradient(-45deg, #bbb 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #bbb 75%),
+        linear-gradient(-45deg, transparent 75%, #bbb 75%);
+      background-size: 32px 32px;
+      background-position: 0 0, 0 16px, 16px -16px, -16px 0;
+    }
+
+    #pixel-grid {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      touch-action: none;
+      cursor: crosshair;
+    }
+
+    .help {
+      max-width: 400px;
+      color: #c9bdD5;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .preview-card {
+      grid-column: 1 / -1;
+    }
+
+    .preview-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(230px, 300px);
+      gap: 18px;
+      align-items: start;
+    }
+
+    #weapon-preview {
+      display: block;
+      width: 100%;
+      height: 360px;
+      border: 1px solid #554764;
+      border-radius: 4px;
+      background: linear-gradient(#30283a, #17131d);
+    }
+
+    .angle-controls {
+      display: grid;
+      gap: 14px;
+    }
+
+    .angle-control {
+      display: grid;
+      grid-template-columns: 1fr 72px;
+      gap: 5px 10px;
+      align-items: center;
+    }
+
+    .angle-control label {
+      font-weight: 600;
+    }
+
+    .angle-control input[type="range"] {
+      grid-column: 1 / -1;
+      width: 100%;
+      accent-color: #bda0e8;
+    }
+
+    .angle-control input[type="number"] {
+      width: 72px;
+      min-height: 34px;
+      padding: 5px;
+      border: 1px solid #79658f;
+      border-radius: 4px;
+      background: #17131d;
+      color: inherit;
+      font: inherit;
+    }
+
+    .angle-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 15px;
+    }
+
+    .weapon-animation-controls {
+      display: grid;
+      gap: 12px;
+      margin: 14px 0;
+    }
+
+    .weapon-angle-control {
+      display: grid;
+      grid-template-columns: 1fr 72px;
+      gap: 6px 10px;
+      align-items: center;
+    }
+
+    .weapon-angle-control input[type="range"] {
+      grid-column: 1 / -1;
+      width: 100%;
+      accent-color: #bda0e8;
+    }
+
+    .weapon-angle-control input[type="number"] {
+      width: 72px;
+      min-height: 34px;
+      padding: 5px;
+      border: 1px solid #79658f;
+      border-radius: 4px;
+      background: #17131d;
+      color: inherit;
+      font: inherit;
+    }
+
+    .output-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    #generated-code {
+      width: 100%;
+      min-height: 390px;
+      resize: vertical;
+      padding: 12px;
+      border: 1px solid #554764;
+      border-radius: 4px;
+      background: #131018;
+      color: #e7dff0;
+      font: 12px/1.5 ui-monospace, monospace;
+      tab-size: 2;
+    }
+
+    #message {
+      min-height: 20px;
+      margin: 8px 0 0;
+      color: #d7c3ff;
+      font-size: 13px;
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: 14px;
+      }
+
+      main {
+        grid-template-columns: 1fr;
+      }
+
+      .preview-card {
+        grid-column: auto;
+      }
+
+      .preview-layout {
+        grid-template-columns: 1fr;
+      }
+
+      #weapon-preview {
+        height: 300px;
+      }
+
+      h1 {
+        grid-column: auto;
+      }
+
+      #generated-code {
+        min-height: 280px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div style="grid-column: 1 / -1; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 8px;">
+      <h1 style="margin: 0;">Éditeur d’armes pixelisées</h1>
+      <div style="display: flex; gap: 10px;">
+        <a href="../blocks/block-editor.html" style="color: #f2edf8; background: #3b2851; border: 1px solid #79658f; padding: 8px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: 600;">🧱 Éditeur de Blocs</a>
+        <a href="../index.html" style="color: #0d2105; background: #66bb6a; border: 1px solid #79dc4f; padding: 8px 12px; border-radius: 4px; text-decoration: none; font-size: 13px; font-weight: 700;">🎮 Monde 3D</a>
+      </div>
+    </div>
+
+    <section class="card" aria-labelledby="design-title">
+      <h2 id="design-title">Dessiner l’arme — 16 × 16 pixels</h2>
+      <div class="controls">
+        <label for="weapon-type">
+          Arme à générer
+          <select id="weapon-type">
+            <option value="pickaxe">Pioche</option>
+            <option value="sword">Épée</option>
+            <option value="axe">Hache</option>
+            <option value="crossbow">Arbalète</option>
+            <option value="flint_and_steel">Briquet (silex et fer)</option>
+          </select>
+        </label>
+        <label for="color-picker">
+          Couleur
+          <input id="color-picker" type="color" value="#e6b923">
+        </label>
+        <button id="clear-grid" type="button">Effacer la grille</button>
+      </div>
+
+      <div class="palette" aria-label="Palette de couleurs">
+        <button class="swatch active" type="button" data-color="#e6b923" style="background:#e6b923" aria-label="Or"></button>
+        <button class="swatch" type="button" data-color="#ffe45c" style="background:#ffe45c" aria-label="Or clair"></button>
+        <button class="swatch" type="button" data-color="#b87912" style="background:#b87912" aria-label="Or foncé"></button>
+        <button class="swatch" type="button" data-color="#805124" style="background:#805124" aria-label="Bois"></button>
+        <button class="swatch" type="button" data-color="#70431f" style="background:#70431f" aria-label="Bois foncé"></button>
+        <button class="swatch" type="button" data-color="#cbd5da" style="background:#cbd5da" aria-label="Métal clair"></button>
+        <button class="swatch" type="button" data-color="#929da5" style="background:#929da5" aria-label="Métal foncé"></button>
+        <button class="swatch" type="button" data-color="#ffffff" style="background:#ffffff" aria-label="Blanc"></button>
+        <button class="swatch" type="button" data-color="#17131d" style="background:#17131d" aria-label="Noir"></button>
+      </div>
+
+      <div class="tools">
+        <label><input id="eraser" type="checkbox"> Gomme / transparent</label>
+        <button class="marker-tool active" type="button" data-tool="draw">Dessiner</button>
+        <button class="marker-tool" type="button" data-tool="hand">Marqueur poignée</button>
+        <button class="marker-tool" type="button" data-tool="front">Marqueur avant</button>
+        <button id="clear-markers" type="button">Effacer les marqueurs</button>
+      </div>
+
+      <label class="image-import" for="image-import">
+        Charger une image PNG/WebP de 160 × 160 (pixels de 10 × 10)
+        <input id="image-import" type="file" accept="image/png,image/webp">
+      </label>
+
+      <div class="grid-wrap">
+        <canvas id="pixel-grid" width="16" height="16" aria-label="Grille de dessin 16 par 16"></canvas>
+      </div>
+      <p class="help">Clique ou glisse sur la grille pour dessiner. Chaque pixel opaque devient un cube d’un pixel d’épaisseur ; les cases non peintes restent transparentes. Sélectionne « Marqueur poignée » puis clique le pixel tenu par la main, et place le marqueur avant dans la direction de la pointe de l’arme.</p>
+    </section>
+
+    <section class="card preview-card" aria-labelledby="preview-title">
+      <h2 id="preview-title">Prévisualiser la prise en main</h2>
+      <div class="preview-layout">
+        <canvas id="weapon-preview" aria-label="Prévisualisation 3D du bras et de l’arme"></canvas>
+        <div>
+          <div class="angle-controls" aria-label="Angles de l’arme">
+            <div class="angle-control">
+              <label for="angle-x">Rotation X</label>
+              <output id="angle-x-value" for="angle-x">0°</output>
+              <input id="angle-x" type="range" min="-180" max="180" step="1" value="0">
+              <input id="angle-x-number" type="number" min="-180" max="180" step="1" value="0" aria-label="Angle X en degrés">
+            </div>
+            <div class="angle-control">
+              <label for="angle-y">Rotation Y</label>
+              <output id="angle-y-value" for="angle-y">0°</output>
+              <input id="angle-y" type="range" min="-180" max="180" step="1" value="0">
+              <input id="angle-y-number" type="number" min="-180" max="180" step="1" value="0" aria-label="Angle Y en degrés">
+            </div>
+            <div class="angle-control">
+              <label for="angle-z">Rotation Z</label>
+              <output id="angle-z-value" for="angle-z">0°</output>
+              <input id="angle-z" type="range" min="-180" max="180" step="1" value="0">
+              <input id="angle-z-number" type="number" min="-180" max="180" step="1" value="0" aria-label="Angle Z en degrés">
+            </div>
+          </div>
+          <div class="angle-actions">
+            <button id="reset-angles" type="button">Réinitialiser les angles</button>
+          </div>
+          <div class="weapon-animation-controls">
+            <label for="weapon-arm-angle">
+              Angle de repos du bras armé
+              <input id="weapon-arm-angle" type="range" min="0" max="160" step="1" value="112">
+            </label>
+            <label for="weapon-arm-angle-number">
+              Angle en degrés
+              <input id="weapon-arm-angle-number" type="number" min="0" max="160" step="1" value="112">
+            </label>
+            <label for="weapon-motion">
+              Mouvement déclenché par E / I
+              <select id="weapon-motion">
+                <option value="arc" selected>Arc de cercle (frappe)</option>
+                <option value="recoil">Recul léger (tir)</option>
+              </select>
+            </label>
+            <button id="test-weapon-motion" type="button">Tester le mouvement</button>
+          </div>
+          <p class="help">Les rotations de l’arme sont appliquées autour de H. Le bras armé reste levé selon son angle de repos ; E pour Alex et I pour Steve déclenchent le mouvement choisi. Fais glisser dans l’aperçu pour tourner la vue.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" aria-labelledby="code-title">
+      <h2 id="code-title">Modèle JavaScript</h2>
+      <div class="output-actions">
+        <button id="generate-code" type="button">Générer le JS</button>
+        <button id="download-svg" type="button">Télécharger le SVG</button>
+        <button id="copy-code" type="button">Copier le code</button>
+        <button id="download-code" type="button">Télécharger le JS</button>
+      </div>
+      <textarea id="generated-code" spellcheck="false" aria-label="Code JavaScript généré" placeholder="Le code généré apparaîtra ici."></textarea>
+      <p id="message" role="status" aria-live="polite"></p>
+    </section>
+  </main>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="../weapons/weapon-motion.js"></script>
+  <script src="../weapons/flint-and-steel.js"></script>
+  <script>
+    const gridSize = 16;
+    const pixels = Array.from({ length: gridSize * gridSize }, () => null);
+    const canvas = document.getElementById('pixel-grid');
+    const context = canvas.getContext('2d');
+    const colorPicker = document.getElementById('color-picker');
+    const eraser = document.getElementById('eraser');
+    const weaponType = document.getElementById('weapon-type');
+    const imageImport = document.getElementById('image-import');
+    const codeOutput = document.getElementById('generated-code');
+    const message = document.getElementById('message');
+    const markers = { hand: null, front: null };
+    const angleInputs = ['x', 'y', 'z'].map((axis) => ({
+      axis,
+      range: document.getElementById(`angle-${axis}`),
+      number: document.getElementById(`angle-${axis}-number`),
+      output: document.getElementById(`angle-${axis}-value`)
+    }));
+    const weaponAngles = { x: 0, y: 0, z: 0 };
+    const weaponArmAngle = document.getElementById('weapon-arm-angle');
+    const weaponArmAngleNumber = document.getElementById('weapon-arm-angle-number');
+    const weaponMotion = document.getElementById('weapon-motion');
+    let previewAttackStartedAt = null;
+    let activeTool = 'draw';
+    let isDrawing = false;
+
+    const previewCanvas = document.getElementById('weapon-preview');
+    const previewScene = new THREE.Scene();
+    const previewCamera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+    previewCamera.position.set(-2.5, 1.65, 4.7);
+    previewCamera.lookAt(0, 0.2, 0);
+    const previewRenderer = new THREE.WebGLRenderer({
+      canvas: previewCanvas,
+      antialias: true,
+      alpha: true
+    });
+    previewRenderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    previewRenderer.outputEncoding = THREE.sRGBEncoding;
+    previewScene.add(new THREE.HemisphereLight(0xffffff, 0x41334d, 0.8));
+    const previewLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    previewLight.position.set(-3, 5, 4);
+    previewScene.add(previewLight);
+
+    const previewCharacter = new THREE.Group();
+    previewScene.add(previewCharacter);
+    const shirtMaterial = new THREE.MeshLambertMaterial({ color: 0x80c944 });
+    const skinMaterial = new THREE.MeshLambertMaterial({ color: 0xe7b27c });
+    const torso = new THREE.Mesh(new THREE.BoxGeometry(0.82, 1.25, 0.38), shirtMaterial);
+    torso.position.set(0, 0.7, 0);
+    previewCharacter.add(torso);
+
+    const armPivot = new THREE.Group();
+    armPivot.position.set(-0.57, 1.18, 0);
+    previewCharacter.add(armPivot);
+    const sleeve = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.58, 0.38), shirtMaterial);
+    sleeve.position.y = -0.29;
+    armPivot.add(sleeve);
+    const forearm = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.55, 0.34), skinMaterial);
+    forearm.position.y = -0.855;
+    armPivot.add(forearm);
+    const handAnchor = new THREE.Group();
+    handAnchor.position.set(0, -1.13, 0.13);
+    armPivot.add(handAnchor);
+    const handMesh = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.22, 0.3), skinMaterial);
+    handMesh.position.y = -0.04;
+    handAnchor.add(handMesh);
+
+    const previewGrip = new THREE.Group();
+    previewGrip.rotation.x = Math.PI / 2;
+    handAnchor.add(previewGrip);
+    const previewWeapon = new THREE.Group();
+    previewGrip.add(previewWeapon);
+    let previewViewDragging = false;
+    let previewViewPointer = null;
+    let previewYaw = -0.49;
+    let previewPitch = 0.12;
+
+    function updatePreviewSize() {
+      const bounds = previewCanvas.getBoundingClientRect();
+      if (!bounds.width || !bounds.height) return;
+      previewRenderer.setSize(bounds.width, bounds.height, false);
+      previewCamera.aspect = bounds.width / bounds.height;
+      previewCamera.updateProjectionMatrix();
+    }
+
+    function renderPreviewWeapon() {
+      const oldGeometries = new Set();
+      const oldMaterials = new Set();
+      previewWeapon.traverse((object) => {
+        if (!object.isMesh) return;
+        oldGeometries.add(object.geometry);
+        if (Array.isArray(object.material)) {
+          object.material.forEach((material) => oldMaterials.add(material));
+        } else {
+          oldMaterials.add(object.material);
+        }
+      });
+      previewWeapon.clear();
+      oldGeometries.forEach((geometry) => geometry.dispose());
+      oldMaterials.forEach((material) => material.dispose());
+      const pixelSize = 1.2 / gridSize;
+      const geometry = new THREE.BoxGeometry(pixelSize, pixelSize, pixelSize);
+      const materials = new Map();
+      pixels.forEach((color, index) => {
+        if (!color) return;
+        if (!materials.has(color)) {
+          materials.set(color, new THREE.MeshLambertMaterial({ color }));
+        }
+        const x = index % gridSize;
+        const y = Math.floor(index / gridSize);
+        const voxel = new THREE.Mesh(geometry, materials.get(color));
+        voxel.position.set(
+          markers.hand ? (x - markers.hand.x) * pixelSize : (x - (gridSize - 1) / 2) * pixelSize,
+          markers.hand ? (markers.hand.y - y) * pixelSize : ((gridSize - 1) / 2 - y) * pixelSize,
+          0
+        );
+        previewWeapon.add(voxel);
+      });
+
+      const markerAngle = markers.hand && markers.front
+        ? Math.atan2(
+          -(markers.front.x - markers.hand.x),
+          markers.hand.y - markers.front.y
+        )
+        : 0;
+      previewWeapon.rotation.set(
+        THREE.MathUtils.degToRad(weaponAngles.x),
+        THREE.MathUtils.degToRad(weaponAngles.y),
+        markerAngle + THREE.MathUtils.degToRad(weaponAngles.z)
+      );
+    }
+
+    function updateAngleControls() {
+      angleInputs.forEach(({ axis, range, number, output }) => {
+        range.value = String(weaponAngles[axis]);
+        number.value = String(weaponAngles[axis]);
+        output.value = `${weaponAngles[axis]}°`;
+      });
+      renderPreviewWeapon();
+    }
+
+    function updatePreviewArm() {
+      const pose = previewAttackStartedAt === null
+        ? { x: 0, y: 0, z: 0 }
+        : getPreviewAttackPose();
+      armPivot.rotation.set(
+        -THREE.MathUtils.degToRad(Number(weaponArmAngle.value)) + pose.x,
+        pose.y,
+        pose.z
+      );
+    }
+
+    function getPreviewAttackPose() {
+      const motion = weaponMotion.value;
+      const duration = window.MinecraftWeaponMotion.durations[motion];
+      const progress = (performance.now() - previewAttackStartedAt) / 1000 / duration;
+      if (progress >= 1) {
+        previewAttackStartedAt = null;
+        return { x: 0, y: 0, z: 0 };
+      }
+      return window.MinecraftWeaponMotion.getPose(motion, progress);
+    }
+
+    function syncWeaponArmAngle(value) {
+      const angle = THREE.MathUtils.clamp(Number(value), 0, 160);
+      if (!Number.isFinite(angle)) return;
+      weaponArmAngle.value = String(angle);
+      weaponArmAngleNumber.value = String(angle);
+      updatePreviewArm();
+    }
+
+    weaponArmAngle.addEventListener('input', () => syncWeaponArmAngle(weaponArmAngle.value));
+    weaponArmAngleNumber.addEventListener('input', () => syncWeaponArmAngle(weaponArmAngleNumber.value));
+    document.getElementById('test-weapon-motion').addEventListener('click', () => {
+      previewAttackStartedAt = performance.now();
+      updatePreviewArm();
+    });
+
+    angleInputs.forEach(({ axis, range, number }) => {
+      for (const input of [range, number]) {
+        input.addEventListener('input', () => {
+          const value = Number(input.value);
+          if (!Number.isFinite(value)) return;
+          weaponAngles[axis] = THREE.MathUtils.clamp(value, -180, 180);
+          updateAngleControls();
+        });
+      }
+    });
+    document.getElementById('reset-angles').addEventListener('click', () => {
+      weaponAngles.x = 0;
+      weaponAngles.y = 0;
+      weaponAngles.z = 0;
+      updateAngleControls();
+    });
+
+    previewCanvas.addEventListener('pointerdown', (event) => {
+      previewViewDragging = true;
+      previewViewPointer = { x: event.clientX, y: event.clientY };
+      previewCanvas.setPointerCapture(event.pointerId);
+    });
+    previewCanvas.addEventListener('pointermove', (event) => {
+      if (!previewViewDragging || !previewViewPointer) return;
+      previewYaw += (event.clientX - previewViewPointer.x) * 0.01;
+      previewPitch = THREE.MathUtils.clamp(
+        previewPitch + (event.clientY - previewViewPointer.y) * 0.01,
+        -1.2,
+        1.2
+      );
+      previewViewPointer = { x: event.clientX, y: event.clientY };
+      previewCamera.position.set(
+        Math.sin(previewYaw) * 4.4,
+        1.65 + previewPitch * 2,
+        Math.cos(previewYaw) * 4.4
+      );
+      previewCamera.lookAt(0, 0.2, 0);
+    });
+    for (const eventName of ['pointerup', 'pointercancel']) {
+      previewCanvas.addEventListener(eventName, () => {
+        previewViewDragging = false;
+        previewViewPointer = null;
+      });
+    }
+
+    const previewResizeObserver = new ResizeObserver(updatePreviewSize);
+    previewResizeObserver.observe(previewCanvas);
+    updatePreviewSize();
+    updateAngleControls();
+    function animatePreview() {
+      requestAnimationFrame(animatePreview);
+      updatePreviewArm();
+      previewRenderer.render(previewScene, previewCamera);
+    }
+    animatePreview();
+
+    function drawGrid() {
+      context.clearRect(0, 0, gridSize, gridSize);
+      pixels.forEach((color, index) => {
+        if (!color) return;
+        context.fillStyle = color;
+        context.fillRect(index % gridSize, Math.floor(index / gridSize), 1, 1);
+      });
+
+      context.strokeStyle = 'rgba(25, 20, 32, 0.5)';
+      context.lineWidth = 0.035;
+      for (let line = 0; line <= gridSize; line++) {
+        context.beginPath();
+        context.moveTo(line, 0);
+        context.lineTo(line, gridSize);
+        context.stroke();
+        context.beginPath();
+        context.moveTo(0, line);
+        context.lineTo(gridSize, line);
+        context.stroke();
+      }
+
+      for (const [key, marker] of Object.entries(markers)) {
+        if (!marker) continue;
+        const x = marker.x;
+        const y = marker.y;
+        context.fillStyle = key === 'hand' ? '#00e5ff' : '#ff4fd8';
+        context.fillRect(x + 0.08, y + 0.08, 0.84, 0.84);
+        context.strokeStyle = '#17131d';
+        context.lineWidth = 0.09;
+        context.strokeRect(x + 0.08, y + 0.08, 0.84, 0.84);
+        context.fillStyle = '#17131d';
+        context.font = 'bold 0.62px sans-serif';
+        context.textAlign = 'center';
+        context.textBaseline = 'middle';
+        context.fillText(key === 'hand' ? 'H' : 'A', x + 0.5, y + 0.52);
+      }
+    }
+
+    function paintAtPointer(event) {
+      const bounds = canvas.getBoundingClientRect();
+      const x = Math.floor((event.clientX - bounds.left) / bounds.width * gridSize);
+      const y = Math.floor((event.clientY - bounds.top) / bounds.height * gridSize);
+      if (x < 0 || x >= gridSize || y < 0 || y >= gridSize) return;
+      if (activeTool === 'hand' || activeTool === 'front') {
+        markers[activeTool] = { x, y };
+        drawGrid();
+        renderPreviewWeapon();
+        return;
+      }
+      pixels[y * gridSize + x] = eraser.checked ? null : colorPicker.value.toLowerCase();
+      drawGrid();
+      renderPreviewWeapon();
+    }
+
+    canvas.addEventListener('pointerdown', (event) => {
+      isDrawing = true;
+      canvas.setPointerCapture(event.pointerId);
+      paintAtPointer(event);
+    });
+    canvas.addEventListener('pointermove', (event) => {
+      if (isDrawing) paintAtPointer(event);
+    });
+    canvas.addEventListener('pointerup', () => { isDrawing = false; });
+    canvas.addEventListener('pointercancel', () => { isDrawing = false; });
+
+    document.querySelectorAll('.swatch').forEach((swatch) => {
+      swatch.addEventListener('click', () => {
+        colorPicker.value = swatch.dataset.color;
+        eraser.checked = false;
+        document.querySelectorAll('.swatch').forEach((item) => item.classList.remove('active'));
+        swatch.classList.add('active');
+      });
+    });
+    colorPicker.addEventListener('input', () => {
+      eraser.checked = false;
+      document.querySelectorAll('.swatch').forEach((item) => {
+        item.classList.toggle('active', item.dataset.color === colorPicker.value.toLowerCase());
+      });
+    });
+    document.getElementById('clear-grid').addEventListener('click', () => {
+      pixels.fill(null);
+      drawGrid();
+      renderPreviewWeapon();
+      message.textContent = 'Grille effacée.';
+    });
+
+    document.querySelectorAll('.marker-tool').forEach((button) => {
+      button.addEventListener('click', () => {
+        activeTool = button.dataset.tool;
+        document.querySelectorAll('.marker-tool').forEach((tool) => {
+          tool.classList.toggle('active', tool === button);
+        });
+        message.textContent = activeTool === 'draw'
+          ? 'Mode dessin sélectionné.'
+          : `Clique sur la grille pour placer le marqueur ${activeTool === 'hand' ? 'de poignée' : 'avant'}.`;
+      });
+    });
+
+    document.getElementById('clear-markers').addEventListener('click', () => {
+      markers.hand = null;
+      markers.front = null;
+      drawGrid();
+      renderPreviewWeapon();
+      message.textContent = 'Marqueurs effacés.';
+    });
+
+    function importImagePixels(image) {
+      const source = document.createElement('canvas');
+      source.width = 160;
+      source.height = 160;
+      const sourceContext = source.getContext('2d', { willReadFrequently: true });
+      if (!sourceContext) return false;
+      sourceContext.drawImage(image, 0, 0);
+
+      const imagePixels = sourceContext.getImageData(0, 0, 160, 160).data;
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          const sourceIndex = ((y * 10 + 5) * 160 + x * 10 + 5) * 4;
+          const alpha = imagePixels[sourceIndex + 3];
+          const pixelIndex = y * gridSize + x;
+          pixels[pixelIndex] = alpha < 128
+            ? null
+            : `#${imagePixels[sourceIndex].toString(16).padStart(2, '0')}${imagePixels[sourceIndex + 1].toString(16).padStart(2, '0')}${imagePixels[sourceIndex + 2].toString(16).padStart(2, '0')}`;
+        }
+      }
+
+      eraser.checked = false;
+      drawGrid();
+      renderPreviewWeapon();
+      return true;
+    }
+
+    let flintTemplateLoaded = false;
+    weaponType.addEventListener('change', () => {
+      if (weaponType.value !== 'flint_and_steel' || flintTemplateLoaded) return;
+      const template = window.MinecraftWeapons?.flint_and_steel;
+      if (!template?.pixelData) {
+        message.textContent = 'La miniature intégrée du briquet est introuvable.';
+        return;
+      }
+
+      template.pixelData.forEach((row, y) => {
+        row.forEach((color, x) => {
+          pixels[y * gridSize + x] = color < 0 ? null : `#${color.toString(16).padStart(6, '0')}`;
+        });
+      });
+      markers.hand = { ...template.hand };
+      markers.front = { ...template.front };
+      weaponAngles.x = template.angles.x;
+      weaponAngles.y = template.angles.y;
+      weaponAngles.z = template.angles.z;
+      updateAngleControls();
+      syncWeaponArmAngle(template.armAngle);
+      weaponMotion.value = template.motion;
+      drawGrid();
+      renderPreviewWeapon();
+      flintTemplateLoaded = true;
+      message.textContent = 'Modèle pixel du briquet chargé. Ajuste-le puis génère le JS.';
+    });
+
+    imageImport.addEventListener('change', () => {
+      const file = imageImport.files[0];
+      if (!file) return;
+
+      if (!['image/png', 'image/webp'].includes(file.type)) {
+        message.textContent = 'Format non pris en charge. Choisis une image PNG ou WebP.';
+        imageImport.value = '';
+        return;
+      }
+
+      const imageUrl = URL.createObjectURL(file);
+      const image = new Image();
+      image.onload = () => {
+        URL.revokeObjectURL(imageUrl);
+        if (image.naturalWidth !== 160 || image.naturalHeight !== 160) {
+          message.textContent = `Dimensions invalides : l’image fait ${image.naturalWidth} × ${image.naturalHeight}px. Il faut exactement 160 × 160px.`;
+          imageImport.value = '';
+          return;
+        }
+
+        if (!importImagePixels(image)) {
+          message.textContent = 'Impossible de lire les pixels de cette image.';
+          imageImport.value = '';
+          return;
+        }
+        message.textContent = 'Image importée : un pixel de la grille par carré de 10 × 10px. Les zones transparentes sont conservées.';
+        imageImport.value = '';
+      };
+      image.onerror = () => {
+        URL.revokeObjectURL(imageUrl);
+        message.textContent = 'Le fichier image n’a pas pu être lu.';
+        imageImport.value = '';
+      };
+      image.src = imageUrl;
+    });
+
+    function generateModule() {
+      if (!markers.hand || !markers.front) {
+        message.textContent = 'Place les deux marqueurs : poignée (H) et avant (A) avant de générer le modèle.';
+        return null;
+      }
+      if (markers.hand.x === markers.front.x && markers.hand.y === markers.front.y) {
+        message.textContent = 'Les deux marqueurs doivent être placés sur des pixels différents.';
+        return null;
+      }
+
+      const id = weaponType.value;
+      const pixelData = pixels.map((color) => color ? Number.parseInt(color.slice(1), 16) : -1);
+      const dataRows = [];
+      for (let y = 0; y < gridSize; y++) {
+        dataRows.push(`    [${pixelData.slice(y * gridSize, (y + 1) * gridSize).join(', ')}]`);
+      }
+      const preview = createSvgPreview();
+
+      return `(function (global) {
+  const hand = { x: ${markers.hand.x}, y: ${markers.hand.y} };
+  const front = { x: ${markers.front.x}, y: ${markers.front.y} };
+  const preview = ${JSON.stringify(preview)};
+  const pixels = [
+${dataRows.join(',\n')}
+  ];
+
+  function create(THREE) {
+    const weapon = new THREE.Group();
+    const pixelSize = 1.2 / ${gridSize};
+    const pixelGeometry = new THREE.BoxGeometry(pixelSize, pixelSize, pixelSize);
+    const materials = new Map();
+
+    pixels.forEach((row, y) => {
+      row.forEach((color, x) => {
+        if (color < 0) return;
+        if (!materials.has(color)) {
+          materials.set(color, new THREE.MeshLambertMaterial({ color }));
+        }
+        const voxel = new THREE.Mesh(pixelGeometry, materials.get(color));
+        voxel.position.set(
+          (x - hand.x) * pixelSize,
+          (hand.y - y) * pixelSize,
+          0
+        );
+        voxel.castShadow = true;
+        weapon.add(voxel);
+      });
+    });
+
+    const directionX = front.x - hand.x;
+    const directionY = hand.y - front.y;
+    weapon.rotation.set(
+      ${weaponAngles.x} * Math.PI / 180,
+      ${weaponAngles.y} * Math.PI / 180,
+      Math.atan2(-directionX, directionY) + (${weaponAngles.z} * Math.PI / 180)
+    );
+    return weapon;
+  }
+
+  global.MinecraftWeapons = global.MinecraftWeapons || {};
+  global.MinecraftWeapons.${id} = {
+    create,
+    preview,
+    ${id === 'flint_and_steel' ? `pixelData: pixels,
+    hand,
+    front,
+    angles: { x: ${weaponAngles.x}, y: ${weaponAngles.y}, z: ${weaponAngles.z} },` : ''}
+    armAngle: ${weaponArmAngle.value},
+    motion: ${JSON.stringify(weaponMotion.value)}
+  };
+})(window);
+`;
+    }
+
+    function getWeaponModuleFileName() {
+      return weaponType.value === 'flint_and_steel' ? 'flint-and-steel' : weaponType.value;
+    }
+
+    function createSvgPreview() {
+      const pathsByColor = new Map();
+      pixels.forEach((color, index) => {
+        if (!color) return;
+        const x = index % gridSize;
+        const y = Math.floor(index / gridSize);
+        pathsByColor.set(color, `${pathsByColor.get(color) || ''}M${x} ${y}h1v1h-1z`);
+      });
+      const paths = [...pathsByColor]
+        .map(([color, path]) => `<path fill="${color}" d="${path}"/>`)
+        .join('');
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" shape-rendering="crispEdges">${paths}</svg>`;
+    }
+
+    document.getElementById('download-svg').addEventListener('click', () => {
+      const blob = new Blob([createSvgPreview()], { type: 'image/svg+xml' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${weaponType.value}.svg`;
+      link.click();
+      URL.revokeObjectURL(url);
+      message.textContent = `Aperçu SVG de ${weaponType.value} téléchargé.`;
+    });
+
+    document.getElementById('generate-code').addEventListener('click', () => {
+      const code = generateModule();
+      if (code) {
+        codeOutput.value = code;
+        message.textContent = `Code généré pour weapons/${getWeaponModuleFileName()}.js`;
+      }
+    });
+
+    document.getElementById('copy-code').addEventListener('click', async () => {
+      const code = generateModule();
+      if (!code) return;
+      codeOutput.value = code;
+      try {
+        await navigator.clipboard.writeText(codeOutput.value);
+        message.textContent = 'Code copié dans le presse-papiers.';
+      } catch (error) {
+        codeOutput.focus();
+        codeOutput.select();
+        message.textContent = 'Copie automatique indisponible : le code est sélectionné, copie-le manuellement.';
+      }
+    });
+
+    document.getElementById('download-code').addEventListener('click', () => {
+      const code = generateModule();
+      if (!code) return;
+      codeOutput.value = code;
+      const blob = new Blob([codeOutput.value], { type: 'text/javascript' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${getWeaponModuleFileName()}.js`;
+      link.click();
+      URL.revokeObjectURL(url);
+      message.textContent = `Fichier ${getWeaponModuleFileName()}.js téléchargé.`;
+    });
+
+    drawGrid();
+  </script>
+</body>
+</html>

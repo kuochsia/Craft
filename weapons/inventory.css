@@ -1,0 +1,126 @@
+.inventory {
+  position: absolute;
+  bottom: 14px;
+  z-index: 20;
+  width: min(360px, calc(50vw - 16px));
+  color: #fff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7.5px;
+  text-shadow: 1px 1px #111;
+  background: rgba(18, 14, 25, 0.88);
+  border: 2px solid #5a4670;
+  border-radius: 6px;
+  padding: 6px 8px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  user-select: none;
+}
+
+.inventory-alex {
+  left: 14px;
+}
+
+.inventory-steve {
+  right: 14px;
+  text-align: right;
+}
+
+.inventory-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+  font-size: 7px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  padding-bottom: 3px;
+}
+
+.inventory-alex .inventory-name {
+  color: #a3dc54;
+  font-weight: bold;
+}
+
+.inventory-steve .inventory-name {
+  color: #4dd0e1;
+  font-weight: bold;
+}
+
+.inventory-active-name {
+  color: #ffd700;
+  font-size: 6.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 140px;
+}
+
+.inventory-slots {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 3px;
+}
+
+.inventory-slot {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  min-width: 0;
+  background: rgba(14, 11, 18, 0.9);
+  border: 1.5px solid #6b5880;
+  border-radius: 3px;
+  box-shadow: inset 1px 1px 0 #3a2e48, inset -1px -1px 0 #000, 0 1px 3px rgba(0,0,0,0.4);
+  cursor: pointer;
+  transition: transform 0.1s, border-color 0.1s;
+}
+
+.inventory-slot:hover {
+  border-color: #baa2d4;
+  transform: scale(1.12);
+  z-index: 5;
+}
+
+.inventory-slot img {
+  display: block;
+  width: 82%;
+  height: 82%;
+  object-fit: contain;
+  image-rendering: pixelated;
+  pointer-events: none;
+}
+
+.inventory-slot.selected {
+  border-color: #ffffff;
+  box-shadow: inset 1px 1px 0 #fff, inset -1px -1px 0 #000, 0 0 0 2px #f4d35e, 0 0 8px #f4d35e;
+  transform: translateY(-2px);
+  background: rgba(244, 211, 94, 0.2);
+  z-index: 6;
+}
+
+@media (max-width: 760px) {
+  .inventory {
+    bottom: 8px;
+    width: min(320px, calc(50vw - 8px));
+    padding: 4px 6px;
+  }
+
+  .inventory-alex {
+    left: 6px;
+  }
+
+  .inventory-steve {
+    right: 6px;
+  }
+
+  .inventory-name {
+    font-size: 6px;
+  }
+
+  .inventory-active-name {
+    font-size: 5.5px;
+    max-width: 90px;
+  }
+
+  .inventory-slots {
+    gap: 2px;
+  }
+}

@@ -1,0 +1,2144 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Éditeur de Blocs 3D Minecraft</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #15111c;
+      color: #f2edf8;
+      --bg-card: #221a2c;
+      --bg-card-alt: #1c1524;
+      --border: #4d3d5f;
+      --border-focus: #9b79c7;
+      --accent: #5db338;
+      --accent-hover: #72cc4b;
+      --gold: #f4d35e;
+      --gold-hover: #ffe478;
+      --danger: #e65151;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      background: radial-gradient(circle at 50% 0%, #291e38 0%, #15111c 80%);
+      color: #f2edf8;
+      padding: 20px;
+    }
+
+    header {
+      max-width: 1400px;
+      margin: 0 auto 20px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 16px;
+      border-bottom: 2px solid var(--border);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .brand-cube {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #74b834 0%, #589224 50%, #4c331c 51%, #6d4d2d 100%);
+      border: 2px solid #a3dc54;
+      border-radius: 6px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    }
+
+    h1 {
+      font-size: clamp(18px, 3vw, 24px);
+      letter-spacing: -0.5px;
+      margin-bottom: 4px;
+    }
+
+    .subtitle {
+      font-size: 13px;
+      color: #c0b4ce;
+    }
+
+    .nav-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .nav-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 14px;
+      background: #2b2038;
+      color: #f2edf8;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .nav-btn:hover {
+      background: #3c2d4f;
+      border-color: var(--border-focus);
+      color: #ffffff;
+      transform: translateY(-1px);
+    }
+
+    .nav-btn.primary {
+      background: var(--accent);
+      border-color: #79dc4f;
+      color: #0d2105;
+      font-weight: 700;
+    }
+
+    .nav-btn.primary:hover {
+      background: var(--accent-hover);
+      color: #000000;
+    }
+
+    main {
+      max-width: 1400px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(360px, 460px) minmax(320px, 1fr) minmax(320px, 400px);
+      gap: 20px;
+      align-items: start;
+    }
+
+    @media (max-width: 1200px) {
+      main {
+        grid-template-columns: minmax(340px, 1fr) minmax(340px, 1fr);
+      }
+      .col-preview {
+        grid-column: 1 / -1;
+      }
+    }
+
+    @media (max-width: 768px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      color: #eadff7;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+      padding-bottom: 8px;
+    }
+
+    .card-title .badge {
+      font-size: 11px;
+      background: #392b49;
+      padding: 3px 8px;
+      border-radius: 12px;
+      color: #d1bfe7;
+      font-weight: normal;
+    }
+
+    /* SECTION IMPORT IMAGE 2D */
+    .import-zone {
+      border: 2px dashed #6b5585;
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      background: var(--bg-card-alt);
+      margin-bottom: 16px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .import-zone.dragover {
+      border-color: var(--gold);
+      background: #312344;
+      transform: scale(1.01);
+    }
+
+    .import-zone input[type="file"] {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    .import-icon {
+      font-size: 26px;
+      margin-bottom: 6px;
+    }
+
+    .import-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: #e5d8f6;
+    }
+
+    .import-subtext {
+      font-size: 11px;
+      color: #9d8db0;
+      margin-top: 4px;
+    }
+
+    .import-options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding: 10px;
+      background: var(--bg-card-alt);
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .import-options label {
+      display: grid;
+      gap: 4px;
+      color: #c9bcdc;
+    }
+
+    select, input[type="text"], input[type="number"], button {
+      min-height: 34px;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: #171220;
+      color: #f2edf8;
+      padding: 6px 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    select:focus, input:focus {
+      outline: none;
+      border-color: var(--border-focus);
+      box-shadow: 0 0 0 2px rgba(155, 121, 199, 0.25);
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 600;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    button:hover {
+      background: #322543;
+      border-color: var(--border-focus);
+    }
+
+    button:active {
+      transform: translateY(1px);
+    }
+
+    /* SÉLECTEUR DE FACES */
+    .face-mode-switch {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 12px;
+    }
+
+    .face-mode-btn {
+      flex: 1;
+      padding: 7px 6px;
+      font-size: 11px;
+      background: #1d1627;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: #bfb0d3;
+    }
+
+    .face-mode-btn.active {
+      background: #473260;
+      border-color: var(--gold);
+      color: #ffffff;
+      font-weight: 700;
+    }
+
+    .face-selector-tabs {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 5px;
+      margin-bottom: 14px;
+    }
+
+    .face-tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 2px;
+      background: #1c1525;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 10px;
+      color: #b7a6cc;
+      transition: all 0.15s;
+    }
+
+    .face-tab:hover {
+      background: #2a1f38;
+      border-color: var(--border-focus);
+    }
+
+    .face-tab.active {
+      border-color: var(--gold);
+      background: #3b2851;
+      color: #ffffff;
+      box-shadow: 0 0 0 1px var(--gold);
+    }
+
+    .face-thumbnail {
+      width: 26px;
+      height: 26px;
+      image-rendering: pixelated;
+      background: #000;
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 2px;
+    }
+
+    /* STUDIO DE DESSIN PIXEL */
+    .studio-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    .active-face-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--gold);
+    }
+
+    .studio-layout {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .canvas-container {
+      position: relative;
+      width: min(100%, 360px);
+      aspect-ratio: 1;
+      border: 3px solid #634d7d;
+      border-radius: 6px;
+      overflow: hidden;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+      background-color: #2a2033;
+      background-image:
+        linear-gradient(45deg, #1f1727 25%, transparent 25%),
+        linear-gradient(-45deg, #1f1727 25%, transparent 25%),
+        linear-gradient(45deg, transparent 75%, #1f1727 75%),
+        linear-gradient(-45deg, transparent 75%, #1f1727 75%);
+      background-size: 20px 20px;
+      background-position: 0 0, 0 10px, 10px -10px, -10px 0;
+    }
+
+    #pixel-canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      image-rendering: pixelated;
+      cursor: crosshair;
+      touch-action: none;
+    }
+
+    .canvas-grid-overlay {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      background-size: calc(100% / 16) calc(100% / 16);
+      background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.08) 1px, transparent 1px);
+    }
+
+    .canvas-grid-overlay.hidden {
+      display: none;
+    }
+
+    /* OUTILS DE DESSIN */
+    .tools-bar {
+      width: 100%;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: center;
+    }
+
+    .tool-btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 5px;
+      padding: 6px 10px;
+      font-size: 12px;
+      background: #241a30;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      color: #ded1ee;
+    }
+
+    .tool-btn:hover {
+      background: #39284d;
+      border-color: var(--border-focus);
+    }
+
+    .tool-btn.active {
+      background: #503572;
+      border-color: var(--gold);
+      color: #ffffff;
+      box-shadow: 0 0 0 1px var(--gold);
+    }
+
+    .canvas-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      width: 100%;
+      justify-content: center;
+      margin-top: 4px;
+    }
+
+    .action-btn {
+      padding: 5px 8px;
+      font-size: 11px;
+      background: #1c1525;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: #c7b6dd;
+    }
+
+    /* COULEURS ET PALETTES */
+    .color-section {
+      width: 100%;
+      margin-top: 8px;
+    }
+
+    .color-controls {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .current-color-preview {
+      width: 38px;
+      height: 38px;
+      border: 2px solid #ffffff;
+      border-radius: 6px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+
+    input[type="color"] {
+      width: 44px;
+      height: 36px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      cursor: pointer;
+      background: none;
+    }
+
+    .hex-input-wrap {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 13px;
+    }
+
+    .hex-input-wrap input {
+      width: 82px;
+      font-family: monospace;
+      text-transform: uppercase;
+    }
+
+    .palette-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .palette-title {
+      font-size: 11px;
+      color: #a896bf;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .swatches-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+
+    .swatch {
+      width: 22px;
+      height: 22px;
+      border-radius: 3px;
+      border: 1px solid rgba(255,255,255,0.25);
+      cursor: pointer;
+      padding: 0;
+      transition: transform 0.1s;
+    }
+
+    .swatch:hover {
+      transform: scale(1.15);
+      border-color: #ffffff;
+      z-index: 2;
+    }
+
+    .swatch.active {
+      outline: 2px solid var(--gold);
+      outline-offset: 1px;
+    }
+
+    /* PRÉVISUALISATION 3D */
+    .preview-card {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .preview-canvas-wrap {
+      position: relative;
+      width: 100%;
+      height: 380px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      overflow: hidden;
+      background: radial-gradient(circle at 50% 30%, #3a2c4e 0%, #161021 80%);
+    }
+
+    #preview-3d-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: grab;
+    }
+
+    #preview-3d-canvas:active {
+      cursor: grabbing;
+    }
+
+    .preview-floating-tools {
+      position: absolute;
+      bottom: 12px;
+      left: 12px;
+      right: 12px;
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .preview-tool-group {
+      display: flex;
+      gap: 6px;
+      pointer-events: auto;
+    }
+
+    .floating-btn {
+      padding: 6px 10px;
+      font-size: 11px;
+      background: rgba(22, 16, 32, 0.85);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(4px);
+      border-radius: 5px;
+      color: #ede2fa;
+    }
+
+    .floating-btn.active {
+      background: #503572;
+      border-color: var(--gold);
+      color: #ffffff;
+    }
+
+    .preview-hint {
+      font-size: 11px;
+      color: #a494bc;
+      line-height: 1.4;
+      text-align: center;
+    }
+
+    /* PRESETS ET PROPRIÉTÉS */
+    .presets-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+
+    .presets-row select {
+      flex: 1;
+    }
+
+    .form-group {
+      display: grid;
+      gap: 5px;
+      margin-bottom: 12px;
+      font-size: 12px;
+    }
+
+    .form-group label {
+      color: #cdbfdf;
+      font-weight: 600;
+    }
+
+    .checkbox-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      color: #cdbfdf;
+    }
+
+    .checkbox-group input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--accent);
+      cursor: pointer;
+    }
+
+    .slider-row {
+      display: grid;
+      grid-template-columns: 1fr 45px;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .slider-row input[type="range"] {
+      accent-color: var(--border-focus);
+    }
+
+    .export-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .export-btn-primary {
+      grid-column: 1 / -1;
+      padding: 10px;
+      background: var(--accent);
+      color: #0b1a05;
+      font-size: 14px;
+      font-weight: 700;
+      border-color: #7ce353;
+      border-radius: 6px;
+    }
+
+    .export-btn-primary:hover {
+      background: var(--accent-hover);
+      color: #000;
+    }
+
+    #code-output {
+      width: 100%;
+      min-height: 180px;
+      resize: vertical;
+      padding: 10px;
+      background: #110d18;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: #cebfee;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      line-height: 1.4;
+      margin-top: 10px;
+    }
+
+    .toast-msg {
+      margin-top: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      text-align: center;
+      display: none;
+    }
+
+    .toast-msg.success {
+      display: block;
+      background: #1e3d16;
+      border: 1px solid #4aa836;
+      color: #d7ffd0;
+    }
+
+    .toast-msg.info {
+      display: block;
+      background: #2b223c;
+      border: 1px solid var(--border-focus);
+      color: #e8d9ff;
+    }
+
+    /* Modal liste des blocs sauvegardés */
+    .modal-overlay {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(10, 8, 15, 0.75);
+      backdrop-filter: blur(5px);
+      z-index: 1000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal-box {
+      background: var(--bg-card);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      width: min(650px, 100%);
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+    }
+
+    .modal-header {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-body {
+      padding: 16px;
+      overflow-y: auto;
+      display: grid;
+      gap: 10px;
+    }
+
+    .saved-block-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px;
+      background: var(--bg-card-alt);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .saved-block-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .saved-block-thumb {
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      border: 1px solid #ffffff33;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-cube" aria-hidden="true"></div>
+      <div>
+        <h1>Éditeur de Blocs 3D</h1>
+        <p class="subtitle">Créez des blocs de matières 3D depuis des images 2D ou au pixel près pour votre monde Minecraft</p>
+      </div>
+    </div>
+    <div class="nav-links">
+      <button class="nav-btn" id="btn-open-saved-modal" type="button">💾 Mes Blocs Sauvegardés</button>
+      <a class="nav-btn" href="../weapons/weapon-editor.html">⚔️ Éditeur d’Armes</a>
+      <a class="nav-btn primary" href="../index.html">🎮 Ouvrir le Monde 3D</a>
+    </div>
+  </header>
+
+  <main>
+    <!-- COLONNE 1 : IMPORT 2D & STUDIO PIXEL ART -->
+    <section class="card col-editor">
+      <div class="card-title">
+        <span>🎨 Texture 2D & Dessin Pixel</span>
+        <span class="badge">16 × 16 px</span>
+      </div>
+
+      <!-- Zone d'importation d'image 2D -->
+      <div class="import-zone" id="drop-zone" title="Glissez-déposez une image ou cliquez pour importer">
+        <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+        <div class="import-icon">📥</div>
+        <div class="import-text">Importer une Image 2D</div>
+        <div class="import-subtext">Glissez une image (PNG, JPG, WebP) pour la convertir en texture de bloc</div>
+      </div>
+
+      <div class="import-options">
+        <label>
+          Appliquer l'image à :
+          <select id="import-target">
+            <option value="all">Toutes les faces (Uniforme)</option>
+            <option value="current" selected>Face courante sélectionnée</option>
+            <option value="sides">Les 4 faces latérales (Côtés)</option>
+            <option value="top">Face supérieure (Dessus)</option>
+            <option value="bottom">Face inférieure (Dessous)</option>
+          </select>
+        </label>
+        <label>
+          Mode de conversion :
+          <select id="import-filter">
+            <option value="nearest" selected>Pixel Art net (Nearest)</option>
+            <option value="smooth">Lissage doux (Bilinear)</option>
+          </select>
+        </label>
+      </div>
+
+      <!-- Mode de texturation du cube -->
+      <div class="face-mode-switch">
+        <button type="button" class="face-mode-btn" data-mode="uniform">Cube Uniforme</button>
+        <button type="button" class="face-mode-btn" data-mode="classic">Haut / Côtés / Bas</button>
+        <button type="button" class="face-mode-btn active" data-mode="distinct">6 Faces Dépliées</button>
+      </div>
+
+      <!-- Onglets des 6 faces -->
+      <div class="face-selector-tabs" id="face-tabs">
+        <div class="face-tab active" data-face="top" title="Face Haut (+Y)">
+          <span>Dessus</span>
+          <canvas class="face-thumbnail" width="16" height="16" id="thumb-top"></canvas>
+        </div>
+        <div class="face-tab" data-face="bottom" title="Face Bas (-Y)">
+          <span>Dessous</span>
+          <canvas class="face-thumbnail" width="16" height="16" id="thumb-bottom"></canvas>
+        </div>
+        <div class="face-tab" data-face="front" title="Face Avant (+Z)">
+          <span>Avant</span>
+          <canvas class="face-thumbnail" width="16" height="16" id="thumb-front"></canvas>
+        </div>
+        <div class="face-tab" data-face="back" title="Face Arrière (-Z)">
+          <span>Arrière</span>
+          <canvas class="face-thumbnail" width="16" height="16" id="thumb-back"></canvas>
+        </div>
+        <div class="face-tab" data-face="right" title="Face Droite (+X)">
+          <span>Droite</span>
+          <canvas class="face-thumbnail" width="16" height="16" id="thumb-right"></canvas>
+        </div>
+        <div class="face-tab" data-face="left" title="Face Gauche (-X)">
+          <span>Gauche</span>
+          <canvas class="face-thumbnail" width="16" height="16" id="thumb-left"></canvas>
+        </div>
+      </div>
+
+      <!-- Studio de dessin -->
+      <div class="studio-header">
+        <span class="active-face-label" id="current-face-label">Face : Dessus (+Y)</span>
+        <button type="button" class="action-btn" id="btn-copy-to-all">📋 Copier vers toutes les faces</button>
+      </div>
+
+      <div class="studio-layout">
+        <div class="canvas-container">
+          <canvas id="pixel-canvas" width="16" height="16"></canvas>
+          <div class="canvas-grid-overlay" id="grid-overlay"></div>
+        </div>
+
+        <!-- Outils de dessin -->
+        <div class="tools-bar">
+          <button type="button" class="tool-btn active" data-tool="pencil" title="Crayon">✏️ Crayon</button>
+          <button type="button" class="tool-btn" data-tool="bucket" title="Remplissage">🪣 Pot</button>
+          <button type="button" class="tool-btn" data-tool="eraser" title="Gomme transparente">🧹 Gomme</button>
+          <button type="button" class="tool-btn" data-tool="picker" title="Pipette">💉 Pipette</button>
+          <button type="button" class="tool-btn" data-tool="darken" title="Assombrir pixel">🌘 Ombrer</button>
+          <button type="button" class="tool-btn" data-tool="lighten" title="Éclaircir pixel">🌔 Éclaircir</button>
+        </div>
+
+        <div class="canvas-actions">
+          <button type="button" class="action-btn" id="btn-noise" title="Ajouter un grain de texture aléatoire">🎲 Bruit matière</button>
+          <button type="button" class="action-btn" id="btn-rotate" title="Pivoter de 90°">🔄 Rotation</button>
+          <button type="button" class="action-btn" id="btn-mirror-h" title="Symétrie horizontale">🪞 Miroir</button>
+          <button type="button" class="action-btn" id="btn-undo" title="Annuler le dernier coup">↩️ Annuler</button>
+          <button type="button" class="action-btn" id="btn-clear-face" title="Effacer la face">🗑️ Effacer</button>
+          <button type="button" class="action-btn" id="btn-toggle-grid" title="Masquer/Afficher la grille">▦ Grille</button>
+        </div>
+      </div>
+
+      <!-- Section Couleurs -->
+      <div class="color-section">
+        <div class="color-controls">
+          <div class="current-color-preview" id="color-preview" style="background:#5ea329"></div>
+          <input type="color" id="primary-color" value="#5ea329">
+          <div class="hex-input-wrap">
+            <span>HEX</span>
+            <input type="text" id="hex-color-input" value="#5EA329" maxlength="7">
+          </div>
+        </div>
+
+        <!-- Palette Minecraft -->
+        <div class="palette-container">
+          <div class="palette-title">
+            <span>Palettes Thématiques</span>
+            <select id="palette-selector" style="font-size:11px; min-height:24px; padding:2px 6px;">
+              <option value="nature">Herbe & Terre</option>
+              <option value="minerals">Pierres & Minerais</option>
+              <option value="wood">Bois & Végétation</option>
+              <option value="construction">Briques & Mortier</option>
+              <option value="nether">Nether & Magma</option>
+              <option value="gems">Diamant & Or</option>
+            </select>
+          </div>
+          <div class="swatches-grid" id="theme-swatches"></div>
+
+          <div class="palette-title" style="margin-top:6px;">
+            <span>Couleurs du bloc actuel</span>
+          </div>
+          <div class="swatches-grid" id="block-swatches"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLONNE 2 : PRÉVISUALISATION 3D EN DIRECT -->
+    <section class="card col-preview preview-card">
+      <div class="card-title">
+        <span>🧊 Prévisualisation 3D Temps Réel</span>
+        <span class="badge">Three.js WebGL</span>
+      </div>
+
+      <div class="preview-canvas-wrap">
+        <canvas id="preview-3d-canvas"></canvas>
+
+        <div class="preview-floating-tools">
+          <div class="preview-tool-group">
+            <button type="button" class="floating-btn active" id="btn-auto-rotate" title="Activer / désactiver la rotation">⟳ Rotation</button>
+            <button type="button" class="floating-btn" id="btn-reset-view" title="Recentrer la vue 3D">🎯 Recentrer</button>
+          </div>
+          <div class="preview-tool-group">
+            <button type="button" class="floating-btn active" id="btn-mode-single" title="Bloc seul">Cube</button>
+            <button type="button" class="floating-btn" id="btn-mode-cluster" title="Plateforme 3x3">Grille 3×3</button>
+            <button type="button" class="floating-btn" id="btn-mode-exploded" title="Vue éclatée des faces">Éclaté</button>
+          </div>
+        </div>
+      </div>
+
+      <p class="preview-hint">
+        💡 Glissez la souris pour faire pivoter le bloc 3D • Molette pour zoomer • Cliquez sur une face du cube 3D pour la sélectionner immédiatement dans l'éditeur 2D !
+      </p>
+
+      <!-- Paramètres du matériau 3D -->
+      <div class="card-title" style="margin-top: 8px;">
+        <span>✨ Matière & Propriétés Physiques</span>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label for="block-name">Nom du bloc :</label>
+          <input type="text" id="block-name" value="Mon Bloc Personnalisé">
+        </div>
+        <div class="form-group">
+          <label for="block-id">Identifiant technique :</label>
+          <input type="text" id="block-id" value="custom_block">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label for="block-category">Catégorie :</label>
+          <select id="block-category">
+            <option value="nature">Nature / Terre</option>
+            <option value="mineraux">Minéraux / Roches</option>
+            <option value="bois">Bois & Arbres</option>
+            <option value="construction" selected>Construction</option>
+            <option value="decoration">Décoration</option>
+            <option value="special">Spécial / Mécanique</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="block-sound">Bruitage de pas / casse :</label>
+          <select id="block-sound">
+            <option value="stone" selected>Pierre (Stone)</option>
+            <option value="wood">Bois (Wood)</option>
+            <option value="grass">Herbe (Grass)</option>
+            <option value="glass">Verre (Glass)</option>
+            <option value="metal">Métal (Metal)</option>
+            <option value="sand">Sable / Gravier</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-group">
+          <input type="checkbox" id="block-transparent">
+          <span>Bloc transparent / Verre (active la transparence)</span>
+        </label>
+      </div>
+
+      <div class="form-group" id="opacity-group" style="display: none;">
+        <label for="block-opacity">Opacité du verre :</label>
+        <div class="slider-row">
+          <input type="range" id="block-opacity" min="0.1" max="1" step="0.05" value="0.85">
+          <span id="opacity-val">85%</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="checkbox-group">
+          <input type="checkbox" id="block-emissive">
+          <span>Luminescent / Émissif (Lumière type lave, torche, diamant)</span>
+        </label>
+      </div>
+
+      <div class="form-group" id="emissive-group" style="display: none;">
+        <label for="emissive-color">Couleur et intensité de luminescence :</label>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="color" id="emissive-color" value="#ff7700">
+          <input type="range" id="emissive-intensity" min="0.1" max="2.0" step="0.1" value="0.8" style="flex:1;">
+          <span id="emissive-val">0.8</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLONNE 3 : PRESETS, EXPORT JS & GESTION -->
+    <section class="card col-export">
+      <div class="card-title">
+        <span>📦 Bibliothèque & Export</span>
+        <span class="badge">Fichiers JS</span>
+      </div>
+
+      <!-- Charger un preset -->
+      <div class="presets-row">
+        <select id="preset-select">
+          <option value="" disabled selected>— Charger un modèle existant —</option>
+          <option value="grass">🌿 Bloc d'Herbe</option>
+          <option value="stone">🪨 Pierre</option>
+          <option value="oak_wood">🪵 Bûche de Chêne</option>
+          <option value="oak_planks">📦 Planches de Chêne</option>
+          <option value="diamond_ore">💎 Minerai de Diamant</option>
+          <option value="gold_block">👑 Bloc d'Or</option>
+          <option value="bricks">🧱 Briques</option>
+          <option value="tnt">🧨 TNT</option>
+          <option value="glass">🪟 Verre Transparent</option>
+          <option value="obsidian">🌌 Obsidienne</option>
+          <option value="bookshelf">📚 Bibliothèque</option>
+          <option value="magma">🌋 Bloc de Magma</option>
+          <option value="leaves">🍃 Feuilles de Chêne</option>
+        </select>
+        <button type="button" id="btn-load-preset">Charger</button>
+      </div>
+
+      <!-- Actions d'export -->
+      <div class="export-buttons">
+        <button type="button" class="export-btn-primary" id="btn-save-local">💾 Enregistrer dans le Monde 3D</button>
+        <button type="button" id="btn-generate-js">⚡ Générer le Code JS</button>
+        <button type="button" id="btn-download-js">📥 Télécharger .js</button>
+        <button type="button" id="btn-copy-js">📋 Copier le JS</button>
+        <button type="button" id="btn-download-texture">🖼️ Télécharger PNG</button>
+      </div>
+
+      <div class="toast-msg" id="toast-feedback"></div>
+
+      <!-- Zone de code JS généré -->
+      <div style="margin-top:14px;">
+        <label for="code-output" style="font-size:12px; font-weight:600; color:#d4c4e7;">Code JavaScript du Bloc :</label>
+        <textarea id="code-output" spellcheck="false" placeholder="Le code JavaScript modulaire apparaîtra ici..."></textarea>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL : MES BLOCS SAUVEGARDÉS -->
+  <div class="modal-overlay" id="saved-modal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Mes Blocs Personnalisés Enregistrés</h3>
+        <button type="button" class="action-btn" id="btn-close-modal">✕ Fermer</button>
+      </div>
+      <div class="modal-body" id="saved-blocks-list">
+        <!-- Rempli dynamiquement -->
+      </div>
+    </div>
+  </div>
+
+  <!-- SCRIPTS : THREE.JS & MOTEUR DE BLOCS -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="blocks.js"></script>
+  <script src="grass.js"></script>
+  <script src="stone.js"></script>
+  <script src="oak-wood.js"></script>
+  <script src="oak-planks.js"></script>
+  <script src="diamond-ore.js"></script>
+  <script src="gold-block.js"></script>
+  <script src="bricks.js"></script>
+  <script src="tnt.js"></script>
+  <script src="glass.js"></script>
+  <script src="obsidian.js"></script>
+  <script src="bookshelf.js"></script>
+  <script src="magma.js"></script>
+  <script src="leaves.js"></script>
+
+  <!-- LOGIQUE DE L'ÉDITEUR -->
+  <script>
+    (function () {
+      'use strict';
+
+      // --- 1. ÉTAT DE L'ÉDITEUR ---
+      const FACES = ['top', 'bottom', 'front', 'back', 'right', 'left'];
+      const FACE_NAMES = {
+        top: 'Dessus (+Y)',
+        bottom: 'Dessous (-Y)',
+        front: 'Avant (+Z)',
+        back: 'Arrière (-Z)',
+        right: 'Droite (+X)',
+        left: 'Gauche (-X)'
+      };
+
+      let activeFace = 'top';
+      let activeMode = 'distinct'; // 'uniform', 'classic', 'distinct'
+      let activeTool = 'pencil';
+      let currentColor = '#5ea329';
+      let isDrawing = false;
+      let undoHistory = [];
+      const MAX_UNDO = 20;
+
+      // Structure de données des 6 faces (16x16 pixels chacune)
+      const blockData = {
+        id: 'mon_bloc',
+        name: 'Mon Bloc Personnalisé',
+        category: 'construction',
+        sound: 'stone',
+        hardness: 1.0,
+        transparent: false,
+        opacity: 0.85,
+        emissive: false,
+        emissiveColor: 0xff7700,
+        emissiveIntensity: 0.8,
+        roughness: 0.9,
+        metalness: 0.05,
+        textures: {}
+      };
+
+      // Initialiser chaque face avec 16x16 pixels transparents / par défaut
+      FACES.forEach(face => {
+        blockData.textures[face] = Array.from({ length: 16 }, () => Array(16).fill('#7a7a7a'));
+      });
+
+      // --- 2. ÉLÉMENTS DU DOM ---
+      const canvas2D = document.getElementById('pixel-canvas');
+      const ctx2D = canvas2D.getContext('2d');
+      const gridOverlay = document.getElementById('grid-overlay');
+      const currentFaceLabel = document.getElementById('current-face-label');
+      const colorPreview = document.getElementById('color-preview');
+      const primaryColorInput = document.getElementById('primary-color');
+      const hexColorInput = document.getElementById('hex-color-input');
+      const themeSwatches = document.getElementById('theme-swatches');
+      const blockSwatches = document.getElementById('block-swatches');
+      const paletteSelector = document.getElementById('palette-selector');
+      const codeOutput = document.getElementById('code-output');
+      const toastFeedback = document.getElementById('toast-feedback');
+
+      // Prévisualisation 3D DOM
+      const canvas3D = document.getElementById('preview-3d-canvas');
+
+      // --- 3. GESTION DE LA SCÈNE THREE.JS ---
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+      camera.position.set(2.4, 2.2, 3.2);
+
+      const renderer = new THREE.WebGLRenderer({
+        canvas: canvas3D,
+        antialias: true,
+        alpha: true
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.outputEncoding = THREE.sRGBEncoding;
+      renderer.shadowMap.enabled = true;
+
+      // Éclairage Three.js
+      const hemiLight = new THREE.HemisphereLight(0xffffff, 0x443355, 0.7);
+      scene.add(hemiLight);
+
+      const dirLight = new THREE.DirectionalLight(0xfff8e7, 0.9);
+      dirLight.position.set(4, 7, 5);
+      dirLight.castShadow = true;
+      dirLight.shadow.mapSize.width = 1024;
+      dirLight.shadow.mapSize.height = 1024;
+      scene.add(dirLight);
+
+      const fillLight = new THREE.DirectionalLight(0x88bbff, 0.4);
+      fillLight.position.set(-4, -2, -3);
+      scene.add(fillLight);
+
+      // Pivot pour l'ensemble du modèle en prévisualisation
+      const previewRoot = new THREE.Group();
+      scene.add(previewRoot);
+
+      // Création du Cube 3D principal
+      const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+      let cubeMaterials = [];
+      let cubeMesh = null;
+      let clusterGroup = null;
+      let explodedGroup = null;
+      let previewDisplayMode = 'single'; // 'single', 'cluster', 'exploded'
+      let autoRotate = true;
+
+      // Sol socle de présentation
+      const pedestalGeo = new THREE.CylinderGeometry(1.4, 1.5, 0.15, 32);
+      const pedestalMat = new THREE.MeshLambertMaterial({ color: 0x221a2c });
+      const pedestal = new THREE.Mesh(pedestalGeo, pedestalMat);
+      pedestal.position.y = -0.65;
+      pedestal.receiveShadow = true;
+      scene.add(pedestal);
+
+      // Contrôles orbite souris personnalisés
+      let isOrbiting = false;
+      let prevMouseX = 0;
+      let prevMouseY = 0;
+      let orbitPhi = 0.55;
+      let orbitTheta = 0.75;
+      let orbitRadius = 3.8;
+
+      function updateCameraPosition() {
+        orbitPhi = Math.max(0.05, Math.min(Math.PI / 2 - 0.05, orbitPhi));
+        camera.position.x = orbitRadius * Math.sin(orbitPhi) * Math.sin(orbitTheta);
+        camera.position.y = orbitRadius * Math.cos(orbitPhi);
+        camera.position.z = orbitRadius * Math.sin(orbitPhi) * Math.cos(orbitTheta);
+        camera.lookAt(0, 0, 0);
+      }
+      updateCameraPosition();
+
+      // Gestion événements souris pour l'orbite 3D
+      canvas3D.addEventListener('mousedown', (e) => {
+        if (e.button === 0) {
+          isOrbiting = true;
+          prevMouseX = e.clientX;
+          prevMouseY = e.clientY;
+          autoRotate = false;
+          document.getElementById('btn-auto-rotate').classList.remove('active');
+        }
+      });
+
+      window.addEventListener('mouseup', () => { isOrbiting = false; });
+      window.addEventListener('mousemove', (e) => {
+        if (!isOrbiting) return;
+        const dx = e.clientX - prevMouseX;
+        const dy = e.clientY - prevMouseY;
+        orbitTheta -= dx * 0.01;
+        orbitPhi -= dy * 0.01;
+        updateCameraPosition();
+        prevMouseX = e.clientX;
+        prevMouseY = e.clientY;
+      });
+
+      canvas3D.addEventListener('wheel', (e) => {
+        e.preventDefault();
+        orbitRadius = Math.max(1.8, Math.min(8.0, orbitRadius + e.deltaY * 0.003));
+        updateCameraPosition();
+      }, { passive: false });
+
+      // Raycaster pour cliquer sur une face du cube 3D et la sélectionner dans l'éditeur 2D
+      const raycaster = new THREE.Raycaster();
+      const mouseVec = new THREE.Vector2();
+
+      canvas3D.addEventListener('click', (e) => {
+        const rect = canvas3D.getBoundingClientRect();
+        mouseVec.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        mouseVec.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(mouseVec, camera);
+
+        if (cubeMesh && previewDisplayMode === 'single') {
+          const intersects = raycaster.intersectObject(cubeMesh);
+          if (intersects.length > 0) {
+            const hit = intersects[0];
+            // Three.js BoxGeometry faceIndex:
+            // 0,1: +X (Right), 2,3: -X (Left), 4,5: +Y (Top), 6,7: -Y (Bottom), 8,9: +Z (Front), 10,11: -Z (Back)
+            const materialIndex = Math.floor(hit.faceIndex / 2);
+            const faceMapping = ['right', 'left', 'top', 'bottom', 'front', 'back'];
+            const targetFace = faceMapping[materialIndex];
+            if (targetFace) {
+              setActiveFace(targetFace);
+              showToast(`Face sélectionnée : ${FACE_NAMES[targetFace]}`, 'info');
+            }
+          }
+        }
+      });
+
+      // --- 4. TEXTURES & MATÉRIAUX THREE.JS ---
+      function makeCanvasTextureFromGrid(pixels) {
+        const c = document.createElement('canvas');
+        c.width = 16;
+        c.height = 16;
+        const ctx = c.getContext('2d');
+        for (let y = 0; y < 16; y++) {
+          for (let x = 0; x < 16; x++) {
+            const col = pixels[y] ? pixels[y][x] : null;
+            if (col && col !== 'transparent') {
+              ctx.fillStyle = col;
+              ctx.fillRect(x, y, 1, 1);
+            }
+          }
+        }
+        const tex = new THREE.CanvasTexture(c);
+        tex.magFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.NearestFilter;
+        tex.generateMipmaps = false;
+        tex.needsUpdate = true;
+        return tex;
+      }
+
+      function rebuild3DMaterials() {
+        // Ordre BoxGeometry: +X, -X, +Y, -Y, +Z, -Z
+        const faceOrder = ['right', 'left', 'top', 'bottom', 'front', 'back'];
+        const isTransparent = blockData.transparent;
+        const opacity = blockData.opacity;
+        const isEmissive = blockData.emissive;
+        const emissiveColor = blockData.emissiveColor;
+        const emissiveIntensity = blockData.emissiveIntensity;
+
+        cubeMaterials = faceOrder.map((face) => {
+          const tex = makeCanvasTextureFromGrid(blockData.textures[face]);
+          const config = {
+            map: tex,
+            transparent: isTransparent,
+            opacity: opacity,
+            alphaTest: isTransparent && opacity === 1.0 ? 0.35 : 0,
+            roughness: blockData.roughness,
+            metalness: blockData.metalness
+          };
+          if (isEmissive) {
+            config.emissive = new THREE.Color(emissiveColor);
+            config.emissiveIntensity = emissiveIntensity;
+            config.emissiveMap = tex;
+          }
+          return new THREE.MeshLambertMaterial(config);
+        });
+
+        if (cubeMesh) {
+          cubeMesh.material = cubeMaterials;
+        }
+
+        // Met à jour la plateforme 3x3 et l'éclaté si affichés
+        if (previewDisplayMode === 'cluster') buildClusterMode();
+        if (previewDisplayMode === 'exploded') buildExplodedMode();
+      }
+
+      function init3DMesh() {
+        previewRoot.clear();
+        rebuild3DMaterials();
+        cubeMesh = new THREE.Mesh(cubeGeometry, cubeMaterials);
+        cubeMesh.castShadow = true;
+        cubeMesh.receiveShadow = true;
+        previewRoot.add(cubeMesh);
+      }
+
+      function buildClusterMode() {
+        previewRoot.clear();
+        clusterGroup = new THREE.Group();
+        for (let x = -1; x <= 1; x++) {
+          for (let z = -1; z <= 1; z++) {
+            const m = new THREE.Mesh(cubeGeometry, cubeMaterials);
+            m.position.set(x, 0, z);
+            m.castShadow = true;
+            m.receiveShadow = true;
+            clusterGroup.add(m);
+          }
+        }
+        previewRoot.add(clusterGroup);
+      }
+
+      function buildExplodedMode() {
+        previewRoot.clear();
+        explodedGroup = new THREE.Group();
+        const faceDefs = [
+          { name: 'right', pos: [0.8, 0, 0], rot: [0, Math.PI / 2, 0], matIdx: 0 },
+          { name: 'left', pos: [-0.8, 0, 0], rot: [0, -Math.PI / 2, 0], matIdx: 1 },
+          { name: 'top', pos: [0, 0.8, 0], rot: [-Math.PI / 2, 0, 0], matIdx: 2 },
+          { name: 'bottom', pos: [0, -0.8, 0], rot: [Math.PI / 2, 0, 0], matIdx: 3 },
+          { name: 'front', pos: [0, 0, 0.8], rot: [0, 0, 0], matIdx: 4 },
+          { name: 'back', pos: [0, 0, -0.8], rot: [0, Math.PI, 0], matIdx: 5 }
+        ];
+        const planeGeo = new THREE.PlaneGeometry(1, 1);
+        faceDefs.forEach(f => {
+          const m = new THREE.Mesh(planeGeo, cubeMaterials[f.matIdx]);
+          m.position.set(...f.pos);
+          m.rotation.set(...f.rot);
+          explodedGroup.add(m);
+        });
+        previewRoot.add(explodedGroup);
+      }
+
+      function setDisplayMode(mode) {
+        previewDisplayMode = mode;
+        document.querySelectorAll('.preview-tool-group .floating-btn').forEach(btn => {
+          if (['btn-mode-single', 'btn-mode-cluster', 'btn-mode-exploded'].includes(btn.id)) {
+            btn.classList.toggle('active', btn.id === `btn-mode-${mode}`);
+          }
+        });
+        if (mode === 'single') init3DMesh();
+        else if (mode === 'cluster') buildClusterMode();
+        else if (mode === 'exploded') buildExplodedMode();
+      }
+
+      // --- 5. GESTION DU DESSIN PIXEL 2D ---
+      function render2DCanvas() {
+        const pixels = blockData.textures[activeFace];
+        ctx2D.clearRect(0, 0, 16, 16);
+        for (let y = 0; y < 16; y++) {
+          for (let x = 0; x < 16; x++) {
+            const color = pixels[y][x];
+            if (color && color !== 'transparent') {
+              ctx2D.fillStyle = color;
+              ctx2D.fillRect(x, y, 1, 1);
+            }
+          }
+        }
+        updateThumbnails();
+        extractBlockPalette();
+      }
+
+      function updateThumbnails() {
+        FACES.forEach(face => {
+          const thumb = document.getElementById(`thumb-${face}`);
+          if (!thumb) return;
+          const tCtx = thumb.getContext('2d');
+          tCtx.clearRect(0, 0, 16, 16);
+          const pixels = blockData.textures[face];
+          for (let y = 0; y < 16; y++) {
+            for (let x = 0; x < 16; x++) {
+              const c = pixels[y][x];
+              if (c && c !== 'transparent') {
+                tCtx.fillStyle = c;
+                tCtx.fillRect(x, y, 1, 1);
+              }
+            }
+          }
+        });
+      }
+
+      function saveUndoState() {
+        undoHistory.push(JSON.parse(JSON.stringify(blockData.textures)));
+        if (undoHistory.length > MAX_UNDO) undoHistory.shift();
+      }
+
+      function undo() {
+        if (undoHistory.length === 0) return;
+        blockData.textures = undoHistory.pop();
+        render2DCanvas();
+        rebuild3DMaterials();
+        showToast('Action annulée', 'info');
+      }
+
+      function getCanvasCoordinates(e) {
+        const rect = canvas2D.getBoundingClientRect();
+        const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+        const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+        const x = Math.floor(((clientX - rect.left) / rect.width) * 16);
+        const y = Math.floor(((clientY - rect.top) / rect.height) * 16);
+        return {
+          x: Math.max(0, Math.min(15, x)),
+          y: Math.max(0, Math.min(15, y))
+        };
+      }
+
+      function applyToolAt(x, y) {
+        const pixels = blockData.textures[activeFace];
+        if (x < 0 || x > 15 || y < 0 || y > 15) return;
+
+        if (activeTool === 'pencil') {
+          pixels[y][x] = currentColor;
+        } else if (activeTool === 'eraser') {
+          pixels[y][x] = null;
+        } else if (activeTool === 'picker') {
+          const picked = pixels[y][x];
+          if (picked) setCurrentColor(picked);
+          return;
+        } else if (activeTool === 'bucket') {
+          floodFill(x, y, pixels[y][x], currentColor);
+        } else if (activeTool === 'darken') {
+          pixels[y][x] = adjustBrightness(pixels[y][x], -0.15);
+        } else if (activeTool === 'lighten') {
+          pixels[y][x] = adjustBrightness(pixels[y][x], 0.15);
+        }
+
+        // Si le mode est 'uniform', on répercute automatiquement sur les autres faces
+        if (activeMode === 'uniform') {
+          FACES.forEach(f => {
+            if (f !== activeFace) {
+              blockData.textures[f][y][x] = pixels[y][x];
+            }
+          });
+        } else if (activeMode === 'classic') {
+          if (['front', 'back', 'right', 'left'].includes(activeFace)) {
+            ['front', 'back', 'right', 'left'].forEach(f => {
+              blockData.textures[f][y][x] = pixels[y][x];
+            });
+          }
+        }
+
+        render2DCanvas();
+        rebuild3DMaterials();
+      }
+
+      function floodFill(startX, startY, targetColor, fillColor) {
+        if (targetColor === fillColor) return;
+        const pixels = blockData.textures[activeFace];
+        const queue = [[startX, startY]];
+        const visited = Array.from({ length: 16 }, () => Array(16).fill(false));
+
+        while (queue.length > 0) {
+          const [cx, cy] = queue.pop();
+          if (cx < 0 || cx > 15 || cy < 0 || cy > 15) continue;
+          if (visited[cy][cx]) continue;
+          visited[cy][cx] = true;
+
+          if (pixels[cy][cx] === targetColor) {
+            pixels[cy][cx] = fillColor;
+            queue.push([cx + 1, cy], [cx - 1, cy], [cx, cy + 1], [cx, cy - 1]);
+          }
+        }
+      }
+
+      function adjustBrightness(hex, percent) {
+        if (!hex || hex === 'transparent') return hex;
+        let num = parseInt(hex.replace('#', ''), 16);
+        if (isNaN(num)) return hex;
+        let r = (num >> 16) + Math.round(255 * percent);
+        let g = ((num >> 8) & 0x00FF) + Math.round(255 * percent);
+        let b = (num & 0x0000FF) + Math.round(255 * percent);
+        r = Math.max(0, Math.min(255, r));
+        g = Math.max(0, Math.min(255, g));
+        b = Math.max(0, Math.min(255, b));
+        return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+      }
+
+      // Événements sur le canvas 2D
+      function startDraw(e) {
+        saveUndoState();
+        isDrawing = true;
+        const { x, y } = getCanvasCoordinates(e);
+        applyToolAt(x, y);
+      }
+
+      function moveDraw(e) {
+        if (!isDrawing) return;
+        const { x, y } = getCanvasCoordinates(e);
+        applyToolAt(x, y);
+      }
+
+      function endDraw() {
+        isDrawing = false;
+      }
+
+      canvas2D.addEventListener('mousedown', startDraw);
+      canvas2D.addEventListener('mousemove', moveDraw);
+      window.addEventListener('mouseup', endDraw);
+
+      canvas2D.addEventListener('touchstart', (e) => { e.preventDefault(); startDraw(e); }, { passive: false });
+      canvas2D.addEventListener('touchmove', (e) => { e.preventDefault(); moveDraw(e); }, { passive: false });
+      window.addEventListener('touchend', endDraw);
+
+      // --- 6. GESTION DES OUTILS & ACTIONS DE TRANSFORMATION ---
+      function setActiveFace(face) {
+        activeFace = face;
+        currentFaceLabel.textContent = `Face : ${FACE_NAMES[face]}`;
+        document.querySelectorAll('.face-tab').forEach(tab => {
+          tab.classList.toggle('active', tab.getAttribute('data-face') === face);
+        });
+        render2DCanvas();
+      }
+
+      document.querySelectorAll('.face-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+          setActiveFace(tab.getAttribute('data-face'));
+        });
+      });
+
+      document.querySelectorAll('.face-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.face-mode-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          activeMode = btn.getAttribute('data-mode');
+          if (activeMode === 'uniform') {
+            copyFaceToOthers(activeFace, FACES);
+          } else if (activeMode === 'classic') {
+            copyFaceToOthers('front', ['back', 'right', 'left']);
+          }
+        });
+      });
+
+      function copyFaceToOthers(sourceFace, targets) {
+        saveUndoState();
+        const sourceData = JSON.stringify(blockData.textures[sourceFace]);
+        targets.forEach(t => {
+          blockData.textures[t] = JSON.parse(sourceData);
+        });
+        render2DCanvas();
+        rebuild3DMaterials();
+        showToast('Textures synchronisées', 'info');
+      }
+
+      document.getElementById('btn-copy-to-all').addEventListener('click', () => {
+        copyFaceToOthers(activeFace, FACES);
+      });
+
+      document.getElementById('btn-rotate').addEventListener('click', () => {
+        saveUndoState();
+        const current = blockData.textures[activeFace];
+        const rotated = Array.from({ length: 16 }, () => Array(16).fill(null));
+        for (let y = 0; y < 16; y++) {
+          for (let x = 0; x < 16; x++) {
+            rotated[x][15 - y] = current[y][x];
+          }
+        }
+        blockData.textures[activeFace] = rotated;
+        render2DCanvas();
+        rebuild3DMaterials();
+      });
+
+      document.getElementById('btn-mirror-h').addEventListener('click', () => {
+        saveUndoState();
+        const current = blockData.textures[activeFace];
+        const mirrored = current.map(row => [...row].reverse());
+        blockData.textures[activeFace] = mirrored;
+        render2DCanvas();
+        rebuild3DMaterials();
+      });
+
+      document.getElementById('btn-noise').addEventListener('click', () => {
+        saveUndoState();
+        const pixels = blockData.textures[activeFace];
+        for (let y = 0; y < 16; y++) {
+          for (let x = 0; x < 16; x++) {
+            const c = pixels[y][x];
+            if (c) {
+              const delta = (Math.random() - 0.5) * 0.18;
+              pixels[y][x] = adjustBrightness(c, delta);
+            }
+          }
+        }
+        render2DCanvas();
+        rebuild3DMaterials();
+        showToast('Grain de matière appliqué', 'info');
+      });
+
+      document.getElementById('btn-clear-face').addEventListener('click', () => {
+        saveUndoState();
+        blockData.textures[activeFace] = Array.from({ length: 16 }, () => Array(16).fill(null));
+        render2DCanvas();
+        rebuild3DMaterials();
+      });
+
+      document.getElementById('btn-undo').addEventListener('click', undo);
+      document.getElementById('btn-toggle-grid').addEventListener('click', () => {
+        gridOverlay.classList.toggle('hidden');
+      });
+
+      // Sélection des outils
+      document.querySelectorAll('.tool-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+          activeTool = btn.getAttribute('data-tool');
+        });
+      });
+
+      // --- 7. SÉLECTION ET PALETTES DE COULEURS ---
+      function setCurrentColor(hex) {
+        currentColor = hex;
+        colorPreview.style.backgroundColor = hex;
+        primaryColorInput.value = hex;
+        hexColorInput.value = hex.toUpperCase();
+      }
+
+      primaryColorInput.addEventListener('input', (e) => {
+        setCurrentColor(e.target.value);
+      });
+
+      hexColorInput.addEventListener('change', (e) => {
+        let val = e.target.value.trim();
+        if (!val.startsWith('#')) val = '#' + val;
+        if (/^#[0-9A-Fa-f]{6}$/.test(val)) {
+          setCurrentColor(val);
+        }
+      });
+
+      const PALETTES = {
+        nature: ['#5ea329', '#6ebc32', '#7ecb3a', '#549223', '#49811e', '#88d742', '#5a3d28', '#68482f', '#775235', '#4d3321', '#855e3e', '#d8c48a'],
+        minerals: ['#6d6d6d', '#797979', '#858585', '#5b5b5b', '#909090', '#505050', '#a4a4a4', '#3c3c3c', '#bfb29e', '#887d6d'],
+        wood: ['#5e452c', '#4b3520', '#6f5235', '#3d2b19', '#7a5a3a', '#a27e4e', '#b68f5a', '#c7a069', '#8e6c40', '#342316'],
+        construction: ['#9b4637', '#b15343', '#85372b', '#a54a3a', '#bf5f4d', '#b9afa2', '#a4988a', '#e8e2d8', '#403833'],
+        nether: ['#1b0d10', '#301319', '#4d1920', '#741f27', '#9c242c', '#ff4400', '#ff7700', '#ffa600', '#e02800', '#ffd24d'],
+        gems: ['#2be7e8', '#4ffffb', '#18bcbe', '#8dffff', '#129294', '#f4ce36', '#fae058', '#e2b924', '#fcee75', '#af830e', '#55df55']
+      };
+
+      function renderThemePalette(key) {
+        themeSwatches.innerHTML = '';
+        const colors = PALETTES[key] || PALETTES.nature;
+        colors.forEach(c => {
+          const s = document.createElement('button');
+          s.type = 'button';
+          s.className = 'swatch';
+          s.style.backgroundColor = c;
+          s.title = c;
+          s.addEventListener('click', () => setCurrentColor(c));
+          themeSwatches.appendChild(s);
+        });
+      }
+
+      paletteSelector.addEventListener('change', (e) => {
+        renderThemePalette(e.target.value);
+      });
+      renderThemePalette('nature');
+
+      function extractBlockPalette() {
+        const unique = new Set();
+        FACES.forEach(face => {
+          blockData.textures[face].forEach(row => {
+            row.forEach(c => {
+              if (c && c !== 'transparent') unique.add(c);
+            });
+          });
+        });
+        blockSwatches.innerHTML = '';
+        Array.from(unique).slice(0, 18).forEach(c => {
+          const s = document.createElement('button');
+          s.type = 'button';
+          s.className = 'swatch';
+          s.style.backgroundColor = c;
+          s.title = c;
+          s.addEventListener('click', () => setCurrentColor(c));
+          blockSwatches.appendChild(s);
+        });
+      }
+
+      // --- 8. IMPORTATION D'IMAGE 2D VERS BLOC 3D ---
+      const dropZone = document.getElementById('drop-zone');
+      const fileInput = document.getElementById('image-file-input');
+      const importTargetSelect = document.getElementById('import-target');
+      const importFilterSelect = document.getElementById('import-filter');
+
+      ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          dropZone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('dragover');
+        });
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        const file = e.dataTransfer.files[0];
+        if (file && file.type.startsWith('image/')) {
+          processImageFile(file);
+        }
+      });
+
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) processImageFile(file);
+      });
+
+      function processImageFile(file) {
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            convertImageToBlock(img);
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      }
+
+      function convertImageToBlock(img) {
+        saveUndoState();
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = 16;
+        tempCanvas.height = 16;
+        const tCtx = tempCanvas.getContext('2d');
+
+        const useSmooth = importFilterSelect.value === 'smooth';
+        tCtx.imageSmoothingEnabled = useSmooth;
+        tCtx.drawImage(img, 0, 0, 16, 16);
+
+        const imgData = tCtx.getImageData(0, 0, 16, 16);
+        const data = imgData.data;
+        const newPixels = Array.from({ length: 16 }, () => Array(16).fill(null));
+
+        for (let y = 0; y < 16; y++) {
+          for (let x = 0; x < 16; x++) {
+            const idx = (y * 16 + x) * 4;
+            const a = data[idx + 3];
+            if (a > 30) {
+              const r = data[idx];
+              const g = data[idx + 1];
+              const b = data[idx + 2];
+              newPixels[y][x] = `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+            } else {
+              newPixels[y][x] = null;
+            }
+          }
+        }
+
+        const target = importTargetSelect.value;
+        if (target === 'all') {
+          FACES.forEach(f => {
+            blockData.textures[f] = JSON.parse(JSON.stringify(newPixels));
+          });
+        } else if (target === 'current') {
+          blockData.textures[activeFace] = newPixels;
+        } else if (target === 'sides') {
+          ['front', 'back', 'right', 'left'].forEach(f => {
+            blockData.textures[f] = JSON.parse(JSON.stringify(newPixels));
+          });
+        } else if (target === 'top') {
+          blockData.textures.top = newPixels;
+        } else if (target === 'bottom') {
+          blockData.textures.bottom = newPixels;
+        }
+
+        render2DCanvas();
+        rebuild3DMaterials();
+        showToast('Image 2D convertie en texture 16×16 avec succès !', 'success');
+      }
+
+      // --- 9. CHARGEMENT DE PRESETS ---
+      const presetSelect = document.getElementById('preset-select');
+      document.getElementById('btn-load-preset').addEventListener('click', () => {
+        const id = presetSelect.value;
+        if (!id) return;
+        loadBlockPreset(id);
+      });
+
+      function loadBlockPreset(id) {
+        const registered = window.MinecraftBlocks ? window.MinecraftBlocks.get(id) : null;
+        if (!registered) {
+          showToast(`Preset "${id}" non trouvé`, 'info');
+          return;
+        }
+        saveUndoState();
+        blockData.id = registered.id;
+        blockData.name = registered.name;
+        blockData.category = registered.category || 'construction';
+        blockData.sound = registered.sound || 'stone';
+        blockData.hardness = registered.hardness !== undefined ? registered.hardness : 1.0;
+        blockData.transparent = Boolean(registered.transparent);
+        blockData.opacity = registered.opacity !== undefined ? registered.opacity : 1.0;
+        blockData.emissive = Boolean(registered.emissive);
+        blockData.emissiveColor = registered.emissiveColor || 0x000000;
+        blockData.emissiveIntensity = registered.emissiveIntensity || 0.8;
+
+        // Mise à jour des textures
+        const tex = registered.textures || {};
+        const sideTex = tex.side || tex.all || tex.top;
+        blockData.textures.top = JSON.parse(JSON.stringify(tex.top || tex.all || sideTex));
+        blockData.textures.bottom = JSON.parse(JSON.stringify(tex.bottom || tex.all || tex.top));
+        blockData.textures.front = JSON.parse(JSON.stringify(tex.front || sideTex));
+        blockData.textures.back = JSON.parse(JSON.stringify(tex.back || sideTex));
+        blockData.textures.right = JSON.parse(JSON.stringify(tex.right || sideTex));
+        blockData.textures.left = JSON.parse(JSON.stringify(tex.left || sideTex));
+
+        // Mise à jour des inputs du formulaire
+        document.getElementById('block-name').value = blockData.name;
+        document.getElementById('block-id').value = blockData.id;
+        document.getElementById('block-category').value = blockData.category;
+        document.getElementById('block-sound').value = blockData.sound;
+        document.getElementById('block-transparent').checked = blockData.transparent;
+        document.getElementById('opacity-group').style.display = blockData.transparent ? 'grid' : 'none';
+        document.getElementById('block-opacity').value = blockData.opacity;
+        document.getElementById('opacity-val').textContent = `${Math.round(blockData.opacity * 100)}%`;
+
+        document.getElementById('block-emissive').checked = blockData.emissive;
+        document.getElementById('emissive-group').style.display = blockData.emissive ? 'grid' : 'none';
+        if (blockData.emissiveColor) {
+          document.getElementById('emissive-color').value = '#' + Number(blockData.emissiveColor).toString(16).padStart(6, '0');
+        }
+
+        render2DCanvas();
+        rebuild3DMaterials();
+        showToast(`Modèle "${blockData.name}" chargé !`, 'success');
+      }
+
+      // --- 10. SYNCHRONISATION PROPRIÉTÉS MATÉRIAUX ---
+      document.getElementById('block-name').addEventListener('input', (e) => { blockData.name = e.target.value; });
+      document.getElementById('block-id').addEventListener('input', (e) => { blockData.id = e.target.value; });
+      document.getElementById('block-category').addEventListener('change', (e) => { blockData.category = e.target.value; });
+      document.getElementById('block-sound').addEventListener('change', (e) => { blockData.sound = e.target.value; });
+
+      const transparentCheck = document.getElementById('block-transparent');
+      const opacityGroup = document.getElementById('opacity-group');
+      const opacityRange = document.getElementById('block-opacity');
+      const opacityVal = document.getElementById('opacity-val');
+
+      transparentCheck.addEventListener('change', () => {
+        blockData.transparent = transparentCheck.checked;
+        opacityGroup.style.display = blockData.transparent ? 'grid' : 'none';
+        rebuild3DMaterials();
+      });
+
+      opacityRange.addEventListener('input', () => {
+        blockData.opacity = parseFloat(opacityRange.value);
+        opacityVal.textContent = `${Math.round(blockData.opacity * 100)}%`;
+        rebuild3DMaterials();
+      });
+
+      const emissiveCheck = document.getElementById('block-emissive');
+      const emissiveGroup = document.getElementById('emissive-group');
+      const emissiveColorInput = document.getElementById('emissive-color');
+      const emissiveIntensityInput = document.getElementById('emissive-intensity');
+      const emissiveVal = document.getElementById('emissive-val');
+
+      emissiveCheck.addEventListener('change', () => {
+        blockData.emissive = emissiveCheck.checked;
+        emissiveGroup.style.display = blockData.emissive ? 'grid' : 'none';
+        rebuild3DMaterials();
+      });
+
+      emissiveColorInput.addEventListener('input', () => {
+        blockData.emissiveColor = parseInt(emissiveColorInput.value.replace('#', '0x'), 16);
+        rebuild3DMaterials();
+      });
+
+      emissiveIntensityInput.addEventListener('input', () => {
+        blockData.emissiveIntensity = parseFloat(emissiveIntensityInput.value);
+        emissiveVal.textContent = emissiveIntensityInput.value;
+        rebuild3DMaterials();
+      });
+
+      // --- 11. CONTRÔLES PRÉVISUALISATION 3D ---
+      document.getElementById('btn-auto-rotate').addEventListener('click', (e) => {
+        autoRotate = !autoRotate;
+        e.currentTarget.classList.toggle('active', autoRotate);
+      });
+
+      document.getElementById('btn-reset-view').addEventListener('click', () => {
+        orbitPhi = 0.55;
+        orbitTheta = 0.75;
+        orbitRadius = 3.8;
+        updateCameraPosition();
+      });
+
+      document.getElementById('btn-mode-single').addEventListener('click', () => setDisplayMode('single'));
+      document.getElementById('btn-mode-cluster').addEventListener('click', () => setDisplayMode('cluster'));
+      document.getElementById('btn-mode-exploded').addEventListener('click', () => setDisplayMode('exploded'));
+
+      // --- 12. EXPORTATION JS & SAUVEGARDE LOCALE ---
+      function generateCode() {
+        if (window.MinecraftBlocks && window.MinecraftBlocks.generateBlockJS) {
+          return window.MinecraftBlocks.generateBlockJS(blockData);
+        }
+        return JSON.stringify(blockData, null, 2);
+      }
+
+      document.getElementById('btn-generate-js').addEventListener('click', () => {
+        const code = generateCode();
+        codeOutput.value = code;
+        showToast('Code JS généré avec succès !', 'success');
+      });
+
+      document.getElementById('btn-copy-js').addEventListener('click', () => {
+        const code = generateCode();
+        codeOutput.value = code;
+        navigator.clipboard.writeText(code).then(() => {
+          showToast('Code copié dans le presse-papier !', 'success');
+        }).catch(() => {
+          showToast('Sélectionnez et copiez le texte ci-dessous', 'info');
+        });
+      });
+
+      document.getElementById('btn-download-js').addEventListener('click', () => {
+        const code = generateCode();
+        const blob = new Blob([code], { type: 'application/javascript;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${blockData.id || 'mon-bloc'}.js`;
+        a.click();
+        URL.revokeObjectURL(url);
+        showToast(`Fichier ${blockData.id}.js téléchargé !`, 'success');
+      });
+
+      document.getElementById('btn-download-texture').addEventListener('click', () => {
+        // Exporte un atlas 64x16 ou 32x32 avec les faces
+        const atlas = document.createElement('canvas');
+        atlas.width = 64;
+        atlas.height = 16;
+        const aCtx = atlas.getContext('2d');
+        const faces = ['top', 'bottom', 'front', 'back'];
+        faces.forEach((f, idx) => {
+          const pixels = blockData.textures[f];
+          for (let y = 0; y < 16; y++) {
+            for (let x = 0; x < 16; x++) {
+              const c = pixels[y][x];
+              if (c) {
+                aCtx.fillStyle = c;
+                aCtx.fillRect(idx * 16 + x, y, 1, 1);
+              }
+            }
+          }
+        });
+        const url = atlas.toDataURL('image/png');
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${blockData.id || 'texture'}-atlas.png`;
+        a.click();
+        showToast('Texture PNG téléchargée !', 'success');
+      });
+
+      document.getElementById('btn-save-local').addEventListener('click', () => {
+        if (window.MinecraftBlocks && window.MinecraftBlocks.saveCustomBlock) {
+          const ok = window.MinecraftBlocks.saveCustomBlock(blockData);
+          if (ok) {
+            showToast(`Bloc "${blockData.name}" enregistré pour le Monde 3D !`, 'success');
+          } else {
+            showToast('Erreur lors de la sauvegarde', 'info');
+          }
+        }
+      });
+
+      // --- 13. MODAL DES BLOCS ENREGISTRÉS ---
+      const modal = document.getElementById('saved-modal');
+      const savedList = document.getElementById('saved-blocks-list');
+
+      document.getElementById('btn-open-saved-modal').addEventListener('click', () => {
+        renderSavedBlocksList();
+        modal.classList.add('open');
+      });
+
+      document.getElementById('btn-close-modal').addEventListener('click', () => {
+        modal.classList.remove('open');
+      });
+
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('open');
+      });
+
+      function renderSavedBlocksList() {
+        savedList.innerHTML = '';
+        const saved = window.MinecraftBlocks ? window.MinecraftBlocks.loadSavedCustomBlocks() : {};
+        const keys = Object.keys(saved);
+        if (keys.length === 0) {
+          savedList.innerHTML = '<p style="text-align:center; color:#9988aa; padding:20px;">Aucun bloc personnalisé sauvegardé pour l\'instant.</p>';
+          return;
+        }
+
+        keys.forEach(k => {
+          const b = saved[k];
+          const item = document.createElement('div');
+          item.className = 'saved-block-item';
+
+          const icon = window.MinecraftBlocks ? window.MinecraftBlocks.createBlockIcon(b, 36) : '';
+          item.innerHTML = `
+            <div class="saved-block-info">
+              <img src="${icon}" class="saved-block-thumb" alt="${b.name}">
+              <div>
+                <strong>${b.name || b.id}</strong>
+                <div style="font-size:11px; color:#a290b8;">id: ${b.id} • ${b.category || 'construction'}</div>
+              </div>
+            </div>
+            <div style="display:flex; gap:6px;">
+              <button type="button" class="action-btn btn-load-saved" data-id="${b.id}">✏️ Charger</button>
+              <button type="button" class="action-btn btn-del-saved" data-id="${b.id}" style="color:var(--danger)">🗑️</button>
+            </div>
+          `;
+          savedList.appendChild(item);
+        });
+
+        savedList.querySelectorAll('.btn-load-saved').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            loadBlockPreset(id);
+            modal.classList.remove('open');
+          });
+        });
+
+        savedList.querySelectorAll('.btn-del-saved').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const id = btn.getAttribute('data-id');
+            if (confirm(`Supprimer le bloc "${id}" ?`)) {
+              window.MinecraftBlocks.deleteCustomBlock(id);
+              renderSavedBlocksList();
+              showToast('Bloc supprimé', 'info');
+            }
+          });
+        });
+      }
+
+      function showToast(msg, type = 'info') {
+        toastFeedback.textContent = msg;
+        toastFeedback.className = `toast-msg ${type}`;
+        clearTimeout(toastFeedback._timer);
+        toastFeedback._timer = setTimeout(() => {
+          toastFeedback.className = 'toast-msg';
+        }, 3500);
+      }
+
+      // --- 14. BOUCLE DE RENDU THREE.JS ---
+      const clock = new THREE.Clock();
+
+      function animate() {
+        requestAnimationFrame(animate);
+        const delta = clock.getDelta();
+
+        if (autoRotate && previewRoot) {
+          previewRoot.rotation.y += delta * 0.45;
+        }
+
+        renderer.render(scene, camera);
+      }
+
+      function handleResize() {
+        const width = canvas3D.parentElement.clientWidth;
+        const height = canvas3D.parentElement.clientHeight;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+      }
+
+      window.addEventListener('resize', handleResize);
+
+      // --- INITIALISATION ---
+      handleResize();
+      loadBlockPreset('grass');
+      animate();
+
+    })();
+  </script>
+</body>
+</html>
