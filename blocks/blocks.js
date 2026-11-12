@@ -122,8 +122,8 @@
         transparent: isTransparent,
         opacity: opacity,
         alphaTest: alphaTest,
-        roughness: blockDef.roughness !== undefined ? blockDef.roughness : 0.9,
-        metalness: blockDef.metalness !== undefined ? blockDef.metalness : 0.05
+  //      roughness: blockDef.roughness !== undefined ? blockDef.roughness : 0.9,
+  //      metalness: blockDef.metalness !== undefined ? blockDef.metalness : 0.05
       };
 
       if (isEmissive) {

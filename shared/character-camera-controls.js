@@ -89,7 +89,7 @@
 
     function move(name, input) {
       const character = characters[name];
-      const otherCharacter = characters[name === 'alex' ? 'steve' : 'alex'];
+      const otherCharacters = Object.values(characters).flat();
       const speed = input.speed;
       if (splitMode) {
         const turnState = turnStates[name];
@@ -122,7 +122,7 @@
           Math.sin(character.root.rotation.y) * forward * speed,
           Math.cos(character.root.rotation.y) * forward * speed,
           collisionObstacles,
-          otherCharacter
+          otherCharacters
         );
       }
 
@@ -140,7 +140,7 @@
         directionX * speed,
         directionZ * speed,
         collisionObstacles,
-        otherCharacter
+        otherCharacters
       );
       character.root.rotation.y = Math.atan2(directionX, directionZ);
       return moved;

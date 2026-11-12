@@ -195,6 +195,36 @@
     buildVoxelTree(THREE, scene, collisionObstacles, x, z, trunkHeight);
   }
 
+  function buildVillagerHouse(THREE, scene, collisionObstacles, centerX, centerZ) {
+    if (!global.MinecraftBlocks) return;
+    worldScene = scene;
+    worldCollisionObstacles = collisionObstacles;
+
+    // Petite maison 5 x 5, avec une porte de deux blocs et des fenêtres.
+    for (let y = 0; y <= 2; y++) {
+      for (let offset = -2; offset <= 2; offset++) {
+        const frontIsDoor = offset === 0 && y < 2;
+        if (!frontIsDoor) spawnBlock(THREE, scene, collisionObstacles, 'oak_planks', centerX + offset, y, centerZ + 2);
+        spawnBlock(THREE, scene, collisionObstacles, 'oak_planks', centerX + offset, y, centerZ - 2);
+
+        for (const side of [-2, 2]) {
+          const isWindow = Math.abs(offset) === 0 && y === 1;
+          if (isWindow) {
+            spawnBlock(THREE, scene, collisionObstacles, 'glass', centerX + side, y, centerZ + offset);
+          } else {
+            spawnBlock(THREE, scene, collisionObstacles, 'oak_planks', centerX + side, y, centerZ + offset);
+          }
+        }
+      }
+    }
+
+    for (let x = -2; x <= 2; x++) {
+      for (let z = -2; z <= 2; z++) {
+        spawnBlock(THREE, scene, collisionObstacles, 'oak_planks', centerX + x, 3, centerZ + z);
+      }
+    }
+  }
+
   /**
    * Construit une colline naturelle en véritables blocs voxels :
    * - En surface / bordure : de l'herbe et de la terre (grass)
@@ -1085,6 +1115,7 @@
 
   global.MinecraftBlockWorld = {
     spawnBlock,
+    buildVillagerHouse,
     buildDecorativeStructures,
     addVoxelTree,
     buildVoxelHill,

@@ -248,6 +248,8 @@
   <script src="characters/character-model.js"></script>
   <script src="characters/alex.js"></script>
   <script src="characters/steve.js"></script>
+  <script src="characters/villager.js"></script>
+  <script src="characters/chicken.js"></script>
 </head>
 <body>
 
@@ -418,6 +420,11 @@
     fillLight.position.set(-8, 6, 8);
     scene.add(fillLight);
 
+    const villager = window.MinecraftCharacters.createVillager(THREE);
+    const villagerHouse = { x: 16, z: 0 };
+    villager.root.position.set(villagerHouse.x, 0, 3.5);
+    scene.add(villager.root);
+
     const alex = window.MinecraftCharacters.createAlex(THREE);
     alex.root.position.set(-1.15, 0, 0);
     scene.add(alex.root);
@@ -426,6 +433,28 @@
     steve.root.position.set(1.15, 0, 0);
     scene.add(steve.root);
     window.MinecraftWeaponsInventory.setCharacters(alex, steve);
+
+    const chickens = [];
+
+    for (let i = 0; i < 4; i++) {
+      const chicken = window.MinecraftCharacters.createChicken(THREE, {
+        // Optionnel : restreindre la zone de promenade du poulet
+        bounds: {
+          minX: villagerHouse.x - 7,
+          maxX: villagerHouse.x + 7,
+          minZ: villagerHouse.z - 7,
+          maxZ: villagerHouse.z + 7
+        }
+      });
+      chicken.root.position.set(
+        villagerHouse.x + (Math.random() - 0.5) * 5,
+        0,
+        villagerHouse.z + 4 + (Math.random() - 0.5) * 5
+      );
+      scene.add(chicken.root);
+      chickens.push(chicken);
+    }
+
 
     /* ==========================================================
        3. DÉCOR ÉPURÉ
@@ -502,6 +531,9 @@
        3.1 BLOCS DE MATIÈRES 3D & CONSTRUCTIONS
        ========================================================== */
     if (window.MinecraftBlockWorld) {
+      window.MinecraftBlockWorld.buildVillagerHouse(
+        THREE, scene, collisionObstacles, villagerHouse.x, villagerHouse.z
+      );
       window.MinecraftBlockWorld.buildDecorativeStructures(THREE, scene, collisionObstacles);
       window.MinecraftBlockWorld.setupBlockInteraction(THREE, scene, camera, canvas, collisionObstacles, alex, steve);
     }
@@ -726,7 +758,7 @@
       THREE,
       renderer,
       canvas,
-      characters: { alex, steve },
+      characters: { alex, steve, villager, chickens },
       collisionObstacles,
       splitToggle: splitCameraToggle,
       divider: splitCameraDivider,
@@ -1125,7 +1157,16 @@
         pageLoader.classList.add('is-hidden');
         setTimeout(() => pageLoader.remove(), 350);
       }
+      // Liste des entités utilisées pour les collisions des poulets.
+      const allEntities = [alex, steve, villager, ...chickens]; // adaptez selon les noms de vos variables
+      chickens.forEach((chicken) => {
+        chicken.update(delta, collisionObstacles, allEntities);
+      });
+
     }
+
+
+
 
     renderLoop();
 

@@ -1,5 +1,5 @@
 (function (global) {
-  const CHARACTER_HEIGHT = 2;
+  const CHARACTER_HEIGHT = 1.8;
   const MODEL_SOURCE_HEIGHT = 3.2;
   const GRAVITY = 22;
   const JUMP_HEIGHT = 1.25;
@@ -256,20 +256,66 @@
     weaponArm.rotation.set(-armAngle + walkBob + pose.x, pose.y, pose.z);
   }
 
-  function moveWithCollisions(character, deltaX, deltaZ, obstacles, otherCharacter) {
+  function getEntityHitbox(entity) {
+    if (!entity || !entity.root) return null;
+    if (entity.isChicken) {
+      return {
+        radius: entity.collisionRadius !== undefined ? entity.collisionRadius : 0.22,
+        height: entity.collisionHeight !== undefined ? entity.collisionHeight : 0.7
+      };
+    }
+    if (entity.isVillager) {
+      return {
+        radius: entity.collisionRadius !== undefined ? entity.collisionRadius : 0.38,
+        height: entity.collisionHeight !== undefined ? entity.collisionHeight : 1.95
+      };
+    }
+    return {
+      radius: entity.collisionRadius !== undefined ? entity.collisionRadius : 0.38,
+      height: entity.collisionHeight !== undefined ? entity.collisionHeight : CHARACTER_HEIGHT
+    };
+  }
+
+  function moveWithCollisions(character, deltaX, deltaZ, obstacles, otherCharacters) {
     const root = character.root;
     const radius = 0.38;
     const startX = root.position.x;
     const startZ = root.position.z;
     const currentY = root.position.y;
 
+    // Accepte un personnage unique OU un tableau d'entités ([otherPlayer, villager, ...chickens])
+    const entities = Array.isArray(otherCharacters)
+      ? otherCharacters.flat()
+      : (otherCharacters ? [otherCharacters] : []);
+
     function canOccupy(x, z) {
-      if (otherCharacter && otherCharacter.root) {
-        const otherRoot = otherCharacter.root;
-        // Collision entre personnages seulement s'ils sont à la même hauteur relative
-        if (Math.abs(currentY - otherRoot.position.y) < CHARACTER_HEIGHT) {
-          if (Math.hypot(x - otherRoot.position.x, z - otherRoot.position.z) < radius * 2) {
-            return false;
+      for (let i = 0; i < entities.length; i++) {
+        const other = entities[i];
+        if (!other || !other.root || other === character || other.root === root) continue;
+
+        const hitbox = getEntityHitbox(other);
+        const otherRoot = other.root;
+        const otherY = otherRoot.position.y;
+
+        // Vérifie le chevauchement vertical selon la hauteur réelle de l'entité
+        // (permet par exemple de sauter par-dessus un poulet)
+        const verticallyOverlaps =
+          currentY < otherY + hitbox.height - 0.15 &&
+          currentY + CHARACTER_HEIGHT > otherY + 0.1;
+
+        if (verticallyOverlaps) {
+          const minDist = radius + hitbox.radius;
+          const nextDist = Math.hypot(x - otherRoot.position.x, z - otherRoot.position.z);
+
+          if (nextDist < minDist) {
+            // Si un poulet s'est déjà approché trop près, autorise le joueur à s'en éloigner
+            const currentDist = Math.hypot(
+              root.position.x - otherRoot.position.x,
+              root.position.z - otherRoot.position.z
+            );
+            if (nextDist < currentDist) {
+              return false;
+            }
           }
         }
       }
