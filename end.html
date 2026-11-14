@@ -181,7 +181,7 @@
   <script src="characters/character-model.js"></script>
   <script src="characters/alex.js"></script>
   <script src="characters/steve.js"></script>
-  <script src="ender-dragon.js"></script>
+  <script src="characters/ender-dragon.js"></script>
 </head>
 <body>
   <div class="menu">
@@ -373,8 +373,8 @@
 
     const mainIsland = createVoxelIsland(46, 38, 8, 31, 0, 0, 0);
     mainIsland.userData.finitePosition = mainIsland.position.clone();
-    const finiteIslandRadiusX = 43;
-    const finiteIslandRadiusZ = 35;
+    const finiteIslandRadiusX = 46;
+    const finiteIslandRadiusZ = 38;
 
     const collisionObstacles = [];
     const pillars = [];
@@ -416,10 +416,10 @@
     }
 
     const alex = window.MinecraftCharacters.createAlex(THREE);
-    alex.root.position.x = -1.15;
+    alex.root.position.set(-1.15, 0, 0);
     scene.add(alex.root);
     const steve = window.MinecraftCharacters.createSteve(THREE);
-    steve.root.position.x = 1.15;
+    steve.root.position.set(1.15, 0, 0);
     scene.add(steve.root);
     window.MinecraftWeaponsInventory.setCharacters(alex, steve);
     const enderDragon = window.EnderDragon.create(THREE);
@@ -473,6 +473,10 @@
     }
 
     function moveCharacterToMeetingPoint(character, destination, otherCharacter, delta, time) {
+      if (character.fallState) {
+        character.isMoving = false;
+        return false;
+      }
       const dx = destination.x - character.root.position.x;
       const dz = destination.z - character.root.position.z;
       const distance = Math.hypot(dx, dz);
@@ -597,17 +601,63 @@
     });
 
     const clock = new THREE.Clock();
+    const respawnPositions = new Map([
+      [alex, new THREE.Vector3(-1.15, 0, 0)],
+      [steve, new THREE.Vector3(1.15, 0, 0)]
+    ]);
+
+    function beginIslandFall(character) {
+      if (character.fallState) return;
+      character.fallState = { elapsed: 0, velocityY: 0, tiltDirection: character.root.position.x < 0 ? -1 : 1 };
+      character.isMoving = false;
+      window.MinecraftCharacterModel.stopJump(character);
+      character.root.userData.jumpVelocity = 0;
+    }
+
+    function updateIslandFall(character, delta) {
+      if (!character.fallState) {
+        window.MinecraftCharacterModel.updateJump(character, delta, collisionObstacles);
+        return;
+      }
+
+      const fall = character.fallState;
+      const step = Math.min(delta, 0.05);
+      fall.elapsed += delta;
+      fall.velocityY += 20 * step;
+      character.root.position.y -= fall.velocityY * step;
+      character.root.rotation.x += step * 0.8;
+      character.root.rotation.z += fall.tiltDirection * step * 0.45;
+
+      if (fall.elapsed >= 2) {
+        character.root.position.copy(respawnPositions.get(character));
+        character.root.rotation.x = 0;
+        character.root.rotation.z = 0;
+        character.root.userData.jumpVelocity = 0;
+        character.root.userData.jumpHeld = false;
+        character.isMoving = false;
+        character.leftLegPivot.rotation.x = 0;
+        character.rightLegPivot.rotation.x = 0;
+        character.leftArmPivot.rotation.set(0, 0, 0);
+        character.rightArmPivot.rotation.set(0, 0, 0);
+        character.fallState = null;
+      }
+    }
+
     function animate() {
       requestAnimationFrame(animate);
       const delta = clock.getDelta();
       const time = clock.getElapsedTime();
       const speed = 4.2 * delta;
       window.MinecraftBlockWorld.update(delta, time);
-      window.MinecraftCharacterModel.updateJump(alex, delta, collisionObstacles);
-      window.MinecraftCharacterModel.updateJump(steve, delta, collisionObstacles);
+      updateIslandFall(alex, delta);
+      updateIslandFall(steve, delta);
 
       function moveCharacter(character, directions, actions) {
         const { root, headPivot, arms, legs } = character;
+        if (character.fallState) {
+          character.isMoving = false;
+          return false;
+        }
         const name = character === alex ? 'alex' : 'steve';
         const moving = cameraControls.move(name, {
           left: keys[directions.left] || (directions.arrows && keys.arrowleft),
@@ -643,7 +693,7 @@
       const dx = alex.root.position.x - steve.root.position.x;
       const dz = alex.root.position.z - steve.root.position.z;
       const separation = Math.hypot(dx, dz);
-      if (!isSplitCameraMode && separation > 16) {
+      if (!isSplitCameraMode && !alex.fallState && !steve.fallState && separation > 16) {
         const correction = (separation - 16) / separation;
         window.MinecraftCharacterModel.moveWithCollisions(
           alex, -dx * correction / 2, -dz * correction / 2, collisionObstacles
@@ -659,10 +709,7 @@
             character.root.position.x / finiteIslandRadiusX,
             character.root.position.z / finiteIslandRadiusZ
           );
-          if (islandDistance > 1) {
-            character.root.position.x /= islandDistance;
-            character.root.position.z /= islandDistance;
-          }
+          if (islandDistance > 1.02) beginIslandFall(character);
         });
       }
 

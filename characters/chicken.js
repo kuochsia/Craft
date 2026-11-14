@@ -237,7 +237,10 @@
       walkCycle: Math.random() * 10,
       flapCycle: 0,
       velocityY: 0,
-      onGround: true
+      onGround: true,
+      followTarget: options.followTarget || null,
+      needsCatchUp: false,
+      followAvoidanceTimer: 0
     };
 
     root.rotation.y = ai.targetYaw;
@@ -332,11 +335,40 @@
 
     function update(delta, obstacles, otherEntities) {
       const dt = Math.min(delta, 0.05);
+      ai.followAvoidanceTimer = Math.max(0, ai.followAvoidanceTimer - dt);
 
       // 1. Décision d'état (Idle vs Wander)
       ai.timer -= dt;
       if (ai.timer <= 0) {
         pickNewBehavior();
+      }
+
+      let isCatchingUp = false;
+      if (ai.followTarget && ai.followTarget.root) {
+        const followRadius = options.followRadius || 22;
+        const distanceToVillager = Math.hypot(
+          ai.followTarget.root.position.x - root.position.x,
+          ai.followTarget.root.position.z - root.position.z
+        );
+        if (distanceToVillager > followRadius) ai.needsCatchUp = true;
+        else if (distanceToVillager < followRadius * 0.65) ai.needsCatchUp = false;
+
+        const relocation = ai.followTarget.relocation;
+        const targetPosition = relocation
+          ? relocation.waypoints[relocation.waypointIndex]
+          : ai.followTarget.root.position;
+        if (ai.needsCatchUp && targetPosition) {
+          isCatchingUp = true;
+          const dx = targetPosition.x - root.position.x;
+          const dz = targetPosition.z - root.position.z;
+          ai.state = 'follow';
+          if (ai.followAvoidanceTimer === 0) ai.targetYaw = Math.atan2(dx, dz);
+          ai.timer = 0.25;
+          ai.isPecking = false;
+        } else if (ai.state === 'follow') {
+          ai.state = 'idle';
+          ai.timer = 0.5;
+        }
       }
 
       // 2. Orientation fluide du corps vers la direction cible
@@ -347,11 +379,12 @@
 
       // 3. Déplacement horizontal
       let isMoving = false;
-      if (ai.state === 'wander') {
+      if (ai.state === 'wander' || ai.state === 'follow') {
         const dirX = Math.sin(root.rotation.y);
         const dirZ = Math.cos(root.rotation.y);
-        const stepX = dirX * WALK_SPEED * dt;
-        const stepZ = dirZ * WALK_SPEED * dt;
+        const speed = WALK_SPEED * (isCatchingUp ? 1.4 : 1);
+        const stepX = dirX * speed * dt;
+        const stepZ = dirZ * speed * dt;
 
         let blocked = false;
         if (canOccupy(root.position.x + stepX, root.position.z, obstacles, otherEntities)) {
@@ -371,6 +404,10 @@
         // Si bloqué par un bloc : tente de sauter par-dessus (auto-jump Minecraft)
         // ou change de direction si le mur est trop haut
         if (blocked) {
+          if (isCatchingUp && ai.followAvoidanceTimer === 0) {
+            ai.followAvoidanceTimer = 0.8;
+            ai.targetYaw += (Math.random() < 0.5 ? -1 : 1) * (0.65 + Math.random() * 0.7);
+          }
           if (ai.onGround && Math.random() < 0.65) {
             ai.velocityY = JUMP_VELOCITY;
             ai.onGround = false;
@@ -453,6 +490,15 @@
       isChicken: true,
       collisionRadius: HITBOX_RADIUS,
       collisionHeight: CHICKEN_HEIGHT,
+      applyHitJump: function () {
+        ai.velocityY = Math.max(ai.velocityY, 3.2);
+        ai.onGround = false;
+        ai.state = 'idle';
+        ai.timer = 0.5;
+      },
+      setFollowTarget: function (target) {
+        ai.followTarget = target || null;
+      },
       update
     };
   }

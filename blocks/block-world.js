@@ -16,6 +16,8 @@
   let worldCollisionObstacles = null;
   let characterAlex = null;
   let characterSteve = null;
+  let characterEntities = [];
+  let villagerHouseRecord = null;
 
   // Géométries partagées pour optimiser les performances des particules
   let debrisGeometry = null;
@@ -199,20 +201,30 @@
     if (!global.MinecraftBlocks) return;
     worldScene = scene;
     worldCollisionObstacles = collisionObstacles;
+    const house = { centerX, centerZ, blocks: [], flammableBlocks: [], rebuilding: false };
+    const addHouseBlock = (blockId, x, y, z) => {
+      const block = spawnBlock(THREE, scene, collisionObstacles, blockId, x, y, z);
+      if (block) {
+        block.userData.villagerHouse = house;
+        house.blocks.push(block);
+        if (FLAMMABLE_BLOCKS.has(blockId)) house.flammableBlocks.push(block);
+      }
+      return block;
+    };
 
     // Petite maison 5 x 5, avec une porte de deux blocs et des fenêtres.
     for (let y = 0; y <= 2; y++) {
       for (let offset = -2; offset <= 2; offset++) {
         const frontIsDoor = offset === 0 && y < 2;
-        if (!frontIsDoor) spawnBlock(THREE, scene, collisionObstacles, 'oak_planks', centerX + offset, y, centerZ + 2);
-        spawnBlock(THREE, scene, collisionObstacles, 'oak_planks', centerX + offset, y, centerZ - 2);
+        if (!frontIsDoor) addHouseBlock('oak_planks', centerX + offset, y, centerZ + 2);
+        addHouseBlock('oak_planks', centerX + offset, y, centerZ - 2);
 
         for (const side of [-2, 2]) {
           const isWindow = Math.abs(offset) === 0 && y === 1;
           if (isWindow) {
-            spawnBlock(THREE, scene, collisionObstacles, 'glass', centerX + side, y, centerZ + offset);
+            addHouseBlock('glass', centerX + side, y, centerZ + offset);
           } else {
-            spawnBlock(THREE, scene, collisionObstacles, 'oak_planks', centerX + side, y, centerZ + offset);
+            addHouseBlock('oak_planks', centerX + side, y, centerZ + offset);
           }
         }
       }
@@ -220,9 +232,11 @@
 
     for (let x = -2; x <= 2; x++) {
       for (let z = -2; z <= 2; z++) {
-        spawnBlock(THREE, scene, collisionObstacles, 'oak_planks', centerX + x, 3, centerZ + z);
+        addHouseBlock('oak_planks', centerX + x, 3, centerZ + z);
       }
     }
+    villagerHouseRecord = house;
+    return house;
   }
 
   /**
@@ -863,6 +877,12 @@
   function attemptCharacterAttack(character) {
     if (!character || !character.root || character.root.userData?.enteredPortal) return false;
 
+    const targetCharacter = findCharacterInFrontOfCharacter(character);
+    if (targetCharacter) {
+      applyCharacterHit(character, targetCharacter);
+      return true;
+    }
+
     const targetBlock = findBlockInFrontOfCharacter(character);
     if (!targetBlock) return false;
 
@@ -873,6 +893,141 @@
     const damage = getAttackDamage(weaponId, blockId, blockDef);
     strikeBlock(targetBlock, damage, character);
     return true;
+  }
+
+  function findCharacterInFrontOfCharacter(attacker) {
+    const root = attacker.root;
+    const forwardX = Math.sin(root.rotation.y);
+    const forwardZ = Math.cos(root.rotation.y);
+    const attackHeight = root.position.y + 1;
+    let bestTarget = null;
+    let bestScore = Infinity;
+
+    for (const target of characterEntities) {
+      if (!target || target === attacker || !target.root || !target.root.visible
+        || target.root.userData?.enteredPortal) continue;
+      if (!(target.isChicken || target.isVillager || target.weaponArmPivot || target.characterName)) continue;
+
+      const targetHeight = target.collisionHeight || (target.isChicken ? 0.7 : target.isVillager ? 1.95 : 1.8);
+      const targetCenterY = target.root.position.y + targetHeight / 2;
+      if (Math.abs(targetCenterY - attackHeight) > 1.5) continue;
+
+      const dx = target.root.position.x - root.position.x;
+      const dz = target.root.position.z - root.position.z;
+      const distance = Math.hypot(dx, dz);
+      const reach = 1.35 + (attacker.collisionRadius || 0.38) + (target.collisionRadius || 0.3);
+      if (distance < 0.15 || distance > reach) continue;
+
+      const dot = (forwardX * dx + forwardZ * dz) / distance;
+      if (dot < 0.45) continue;
+      const score = distance + (1 - dot) * 1.2;
+      if (score < bestScore) {
+        bestScore = score;
+        bestTarget = target;
+      }
+    }
+    return bestTarget;
+  }
+
+  function applyCharacterHit(attacker, target) {
+    const dx = target.root.position.x - attacker.root.position.x;
+    const dz = target.root.position.z - attacker.root.position.z;
+    const length = Math.hypot(dx, dz) || 1;
+    const continuingReaction = target.hitReaction && target.hitReaction.elapsed < 0.45;
+    const reaction = continuingReaction ? target.hitReaction : {
+      elapsed: 0,
+      velocityX: 0,
+      velocityZ: 0,
+      originalMaterials: [],
+      flashMaterials: [],
+      materialsRestored: false,
+      jumpVelocity: 0
+    };
+    reaction.elapsed = 0;
+    reaction.velocityX = (dx / length) * 2.4;
+    reaction.velocityZ = (dz / length) * 2.4;
+    if (!continuingReaction) reaction.baseY = target.root.position.y;
+    target.hitReaction = reaction;
+
+    if (target.isChicken && typeof target.applyHitJump === 'function') {
+      target.applyHitJump();
+    } else if (target.isAlex || target.weaponArmPivot) {
+      target.root.userData.jumpVelocity = Math.max(target.root.userData.jumpVelocity || 0, 3.6);
+    } else if (target.isVillager) {
+      reaction.jumpVelocity = Math.max(reaction.jumpVelocity || 0, 3.8);
+    }
+
+    if (reaction.originalMaterials.length === 0) {
+      const materialClones = new Map();
+      target.root.traverse((object) => {
+        if (!object.material) return;
+        const original = object.material;
+        const materials = Array.isArray(original) ? original : [original];
+        const clones = materials.map((material) => {
+          if (!material || !material.color) return material;
+          if (!materialClones.has(material)) materialClones.set(material, material.clone());
+          return materialClones.get(material);
+        });
+        if (clones.some((material, index) => material !== materials[index])) {
+          reaction.originalMaterials.push({ object, material: original });
+          object.material = Array.isArray(original) ? clones : clones[0];
+        }
+      });
+      reaction.flashMaterials = Array.from(materialClones.values());
+    }
+    reaction.flashMaterials.forEach((material) => material.color.set(0xff5555));
+    reaction.materialsRestored = false;
+  }
+
+  function restoreHitFlashMaterials(reaction) {
+    reaction.originalMaterials.forEach(({ object, material }) => { object.material = material; });
+    reaction.flashMaterials.forEach((material) => material.dispose());
+    reaction.originalMaterials.length = 0;
+    reaction.flashMaterials.length = 0;
+    reaction.materialsRestored = true;
+  }
+
+  function updateCharacterHitReactions(delta) {
+    for (const target of characterEntities) {
+      const reaction = target && target.hitReaction;
+      if (!reaction) continue;
+
+      reaction.elapsed += delta;
+      if (reaction.elapsed <= 0.32) {
+        global.MinecraftCharacterModel.moveWithCollisions(
+          target,
+          reaction.velocityX * delta,
+          reaction.velocityZ * delta,
+          worldCollisionObstacles,
+          characterEntities
+        );
+        const damping = Math.exp(-7 * delta);
+        reaction.velocityX *= damping;
+        reaction.velocityZ *= damping;
+      }
+
+      if (target.isVillager) {
+        reaction.jumpVelocity -= 18 * delta;
+        target.root.position.y += reaction.jumpVelocity * delta;
+        if (target.root.position.y <= reaction.baseY && reaction.jumpVelocity <= 0) {
+          target.root.position.y = reaction.baseY;
+          reaction.jumpVelocity = 0;
+        }
+      }
+
+      if (reaction.elapsed >= 0.28 && !reaction.materialsRestored) {
+        restoreHitFlashMaterials(reaction);
+      }
+      if (reaction.elapsed >= 0.45) {
+        if (!reaction.materialsRestored) restoreHitFlashMaterials(reaction);
+        if (target.isVillager) {
+          target.root.position.y = reaction.baseY;
+          reaction.jumpVelocity = 0;
+        }
+        target.hitReaction = null;
+      }
+    }
+    updateVillagerRelocation(delta);
   }
 
   /**
@@ -955,6 +1110,113 @@
     }
   }
 
+  function findReplacementHouseSite() {
+    const villager = characterEntities.find((entity) => entity && entity.isVillager);
+
+    for (let attempt = 0; attempt < 120; attempt++) {
+      const angle = Math.random() * Math.PI * 2;
+      // Les arbres décoratifs forment une couronne d’environ 28 à 47 blocs autour du spawn.
+      const distance = 30 + Math.random() * 16;
+      const x = Math.round(Math.cos(angle) * distance);
+      const z = Math.round(Math.sin(angle) * distance);
+      const overlapsBlocks = placedBlocks.some((block) => block.visible
+        && block.position.y < 4.5
+        && Math.abs(block.position.x - x) < 4
+        && Math.abs(block.position.z - z) < 4);
+      const tooCloseToCharacter = characterEntities.some((entity) => entity && entity !== villager
+        && Math.hypot(entity.root.position.x - x, entity.root.position.z - z) < 10);
+      if (!overlapsBlocks && !tooCloseToCharacter) return { x, z };
+    }
+
+    const angle = Math.random() * Math.PI * 2;
+    const distance = 40;
+    return {
+      x: Math.round(Math.cos(angle) * distance),
+      z: Math.round(Math.sin(angle) * distance)
+    };
+  }
+
+  function removeHouseBlock(block) {
+    if (!block || !placedBlocks.includes(block)) return;
+    removeBlockFire(block);
+    if (block.userData.crackMesh) {
+      worldScene.remove(block.userData.crackMesh);
+      block.userData.crackMesh.geometry?.dispose();
+      block.userData.crackMesh.material?.dispose();
+    }
+    worldScene.remove(block);
+    placedBlocks.splice(placedBlocks.indexOf(block), 1);
+    const obstacleIndex = worldCollisionObstacles.indexOf(block.userData.collisionObstacle);
+    if (obstacleIndex >= 0) worldCollisionObstacles.splice(obstacleIndex, 1);
+    block.geometry?.dispose();
+    const materials = Array.isArray(block.material) ? block.material : [block.material];
+    materials.forEach((material) => {
+      if (material && !global.MinecraftBlocks?.isSharedBlockMaterial?.(material)) material.dispose();
+    });
+  }
+
+  function replaceBurnedVillagerHouse(house) {
+    if (!house || house !== villagerHouseRecord || house.rebuilding) return;
+    house.rebuilding = true;
+    house.blocks.forEach(removeHouseBlock);
+
+    const site = findReplacementHouseSite();
+    buildVillagerHouse(global.THREE, worldScene, worldCollisionObstacles, site.x, site.z);
+    const villager = characterEntities.find((entity) => entity && entity.isVillager);
+    if (villager) {
+      villager.root.position.y = 0;
+      const side = villager.root.position.x <= site.x ? -1 : 1;
+      const depthSide = villager.root.position.z <= site.z ? -1 : 1;
+      villager.relocation = {
+        x: site.x,
+        z: site.z + 3.5,
+        waypoints: [
+          { x: site.x + side * 4.5, z: site.z + depthSide * 4.5 },
+          { x: site.x + side * 4.5, z: site.z + 4.5 },
+          { x: site.x, z: site.z + 4.5 }
+        ],
+        waypointIndex: 0,
+        elapsed: 0
+      };
+    }
+  }
+
+  function updateVillagerRelocation(delta) {
+    const villager = characterEntities.find((entity) => entity && entity.isVillager && entity.relocation);
+    if (!villager) return;
+    const route = villager.relocation;
+    const waypoint = route.waypoints[route.waypointIndex];
+    const dx = waypoint.x - villager.root.position.x;
+    const dz = waypoint.z - villager.root.position.z;
+    const distance = Math.hypot(dx, dz);
+    route.elapsed += delta;
+
+    if (distance <= 0.35) {
+      route.waypointIndex++;
+      if (route.waypointIndex >= route.waypoints.length) {
+        villager.root.position.set(route.x, 0, route.z);
+        villager.root.rotation.y = 0;
+        villager.legs.forEach((leg) => { leg.rotation.x = 0; });
+        villager.relocation = null;
+        return;
+      }
+      return;
+    }
+
+    villager.root.rotation.y = Math.atan2(dx, dz);
+    const step = Math.min(distance, 1.8 * delta);
+    global.MinecraftCharacterModel.moveWithCollisions(
+      villager,
+      dx / distance * step,
+      dz / distance * step,
+      worldCollisionObstacles,
+      characterEntities
+    );
+    const swing = Math.sin(route.elapsed * 12) * 0.45;
+    villager.legs[0].rotation.x = swing;
+    villager.legs[1].rotation.x = -swing;
+  }
+
   function updateBurningBlocks(delta, time) {
     let blocksByPosition = null;
     const neighborOffsets = [
@@ -1019,8 +1281,12 @@
       if (burning.isTnt) {
         detonateTnt(block);
       } else {
+        const house = block.userData.villagerHouse;
         const blockDef = block.userData.blockDef || global.MinecraftBlocks?.get(block.userData.blockId);
         destroyAndExplodeBlock(block, blockDef, worldScene, worldCollisionObstacles, { debrisCount: 8 });
+        if (house && house.flammableBlocks.every((houseBlock) => !placedBlocks.includes(houseBlock))) {
+          replaceBurnedVillagerHouse(house);
+        }
       }
     }
   }
@@ -1105,11 +1371,12 @@
     }
   }
 
-  function setupBlockInteraction(THREE, scene, camera, canvas, collisionObstacles, alex, steve) {
+  function setupBlockInteraction(THREE, scene, camera, canvas, collisionObstacles, alex, steve, entities = []) {
     worldScene = scene;
     worldCollisionObstacles = collisionObstacles;
     characterAlex = alex;
     characterSteve = steve;
+    characterEntities = Array.isArray(entities) && entities.length ? entities : [alex, steve];
     // Plus de contrôle de blocs à la souris : la souris est exclusivement réservée à la caméra
   }
 
@@ -1123,6 +1390,7 @@
     setupBlockInteraction,
     triggerAction,
     triggerAttack: triggerAction,
+    updateCharacterHitReactions,
     update,
     placedBlocks
   };
