@@ -18,6 +18,7 @@
   let characterSteve = null;
   let characterEntities = [];
   let villagerHouseRecord = null;
+  let mineableTerrain = null;
 
   // Géométries partagées pour optimiser les performances des particules
   let debrisGeometry = null;
@@ -30,6 +31,7 @@
     glass: { baseHp: 1, bestTools: ['sword', 'pickaxe', 'axe', 'crossbow', 'none'], bonusDamage: 2 },
     tnt: { baseHp: 1, bestTools: ['sword', 'pickaxe', 'axe', 'crossbow', 'none'], bonusDamage: 2 },
     grass: { baseHp: 2, bestTools: ['sword', 'axe', 'pickaxe'], bonusDamage: 2 },
+    dirt: { baseHp: 2, bestTools: ['sword', 'axe', 'pickaxe'], bonusDamage: 2 },
     leaves: { baseHp: 1, bestTools: ['sword', 'axe', 'none'], bonusDamage: 2 },
     bookshelf: { baseHp: 3, bestTools: ['axe'], bonusDamage: 3 },
     oak_planks: { baseHp: 3, bestTools: ['axe'], bonusDamage: 2 },
@@ -144,6 +146,370 @@
     mesh.userData.collisionObstacle = obstacle;
 
     return mesh;
+  }
+
+  function createMineableTerrain(THREE, scene, collisionObstacles, options = {}) {
+    const chunkSize = options.chunkSize || 24;
+    const chunkRadius = options.chunkRadius === undefined ? 1 : options.chunkRadius;
+    const cellCount = chunkSize * chunkSize;
+    const grassDef = global.MinecraftBlocks.get('grass');
+    const dirtDef = global.MinecraftBlocks.get('dirt');
+    if (!grassDef || !dirtDef) throw new Error('Les blocs grass et dirt doivent être chargés avant le terrain.');
+
+    function createAtlasMaterial(blockDef) {
+      const textures = blockDef.textures || {};
+      const side = textures.side || textures.front || textures.all || textures.top;
+      const faces = [
+        textures.right || side,
+        textures.left || side,
+        textures.top || textures.all || side,
+        textures.bottom || textures.all || side,
+        textures.front || side,
+        textures.back || side
+      ];
+      const canvas = document.createElement('canvas');
+      canvas.width = 48;
+      canvas.height = 32;
+      const context = canvas.getContext('2d');
+      faces.forEach((pixels, index) => {
+        const tileX = index % 3;
+        const tileY = Math.floor(index / 3);
+        if (Array.isArray(pixels)) {
+          for (let y = 0; y < 16; y++) {
+            for (let x = 0; x < 16; x++) {
+              const color = pixels[y] && pixels[y][x];
+              if (!color || color === 'transparent') continue;
+              context.fillStyle = color;
+              context.fillRect(tileX * 16 + x, tileY * 16 + y, 1, 1);
+            }
+          }
+        }
+      });
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.magFilter = THREE.NearestFilter;
+      texture.minFilter = THREE.NearestFilter;
+      texture.generateMipmaps = false;
+      return new THREE.MeshLambertMaterial({ map: texture });
+    }
+
+    const geometry = new THREE.BoxGeometry(1, 1, 1);
+    const uv = geometry.getAttribute('uv');
+    for (let face = 0; face < 6; face++) {
+      const tileX = face % 3;
+      const tileY = Math.floor(face / 3);
+      for (let vertex = face * 4; vertex < face * 4 + 4; vertex++) {
+        uv.setXY(vertex, (tileX + uv.getX(vertex)) / 3, (1 - tileY + uv.getY(vertex)) / 2);
+      }
+    }
+    uv.needsUpdate = true;
+
+    const materials = {
+      grass: createAtlasMaterial(grassDef),
+      dirt: createAtlasMaterial(dirtDef)
+    };
+    const storedColumnBlocks = new Map();
+    const minedVoxels = new Set();
+    let terrainBounds = options.bounds || null;
+    const chunks = new Map();
+    const chunkPool = [];
+    const activeColumns = new Map();
+    const zeroScale = new THREE.Vector3(0, 0, 0);
+    const unitScale = new THREE.Vector3(1, 1, 1);
+    const dummyPosition = new THREE.Vector3();
+    const dummyQuaternion = new THREE.Quaternion();
+    const dummyMatrix = new THREE.Matrix4();
+    let centerChunkX = null;
+    let centerChunkZ = null;
+    let centerWorldX = options.centerX || 0;
+    let centerWorldZ = options.centerZ || 0;
+
+    const columnKey = (x, z) => `${x},${z}`;
+    const voxelKey = (x, y, z) => `${x},${y},${z}`;
+
+    function setInstance(mesh, index, localX, centerY, localZ, active = true) {
+      dummyPosition.set(localX, centerY, localZ);
+      dummyMatrix.compose(dummyPosition, dummyQuaternion, active ? unitScale : zeroScale);
+      mesh.setMatrixAt(index, dummyMatrix);
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.boundingSphere = null;
+    }
+
+    function createChunk(chunkX, chunkZ) {
+      let chunk = chunkPool.pop();
+      const group = chunk ? chunk.group : new THREE.Group();
+      const grassMesh = chunk ? chunk.grassMesh : new THREE.InstancedMesh(geometry, materials.grass, cellCount);
+      const dirtMesh = chunk ? chunk.dirtMesh : new THREE.InstancedMesh(geometry, materials.dirt, cellCount * 2);
+      grassMesh.count = 0;
+      dirtMesh.count = 0;
+      grassMesh.castShadow = dirtMesh.castShadow = false;
+      grassMesh.receiveShadow = dirtMesh.receiveShadow = true;
+      const originX = chunkX * chunkSize - chunkSize / 2;
+      const originZ = chunkZ * chunkSize - chunkSize / 2;
+      group.position.set(originX, 0, originZ);
+      group.visible = true;
+      if (!chunk) {
+        group.add(grassMesh, dirtMesh);
+        scene.add(group);
+        chunk = {
+          group,
+          grassMesh,
+          dirtMesh
+        };
+      }
+      grassMesh.boundingSphere = null;
+      dirtMesh.boundingSphere = null;
+      Object.assign(chunk, {
+        key: `${chunkX},${chunkZ}`,
+        chunkX,
+        chunkZ,
+        grassNextSlot: 0,
+        dirtNextSlot: 0,
+        dirtFreeSlots: [],
+        columns: []
+      });
+
+      for (let localX = 0; localX < chunkSize; localX++) {
+        for (let localZ = 0; localZ < chunkSize; localZ++) {
+          const x = originX + localX;
+          const z = originZ + localZ;
+          if (terrainBounds && (x < terrainBounds.minX || x > terrainBounds.maxX
+            || z < terrainBounds.minZ || z > terrainBounds.maxZ)) continue;
+          const key = columnKey(x, z);
+          const savedBlocks = storedColumnBlocks.get(key);
+          const column = { x, z, localX, localZ, surfaceY: 0, blocks: [], chunk };
+          chunk.columns.push(column);
+          activeColumns.set(key, column);
+
+          if (savedBlocks) {
+            savedBlocks.forEach((savedBlock) => addTerrainBlock(
+              chunk, column, savedBlock.blockId, savedBlock.centerY, savedBlock.supportLayerY
+            ));
+            refreshColumnSurface(column);
+          } else {
+            column.surfaceY = 0;
+            addTerrainBlock(chunk, column, 'grass', -0.5);
+            addTerrainBlock(chunk, column, 'dirt', -1.5);
+          }
+        }
+      }
+      return chunk;
+    }
+
+    function growDirtMesh(chunk, requiredCapacity) {
+      const oldMesh = chunk.dirtMesh;
+      const capacity = Math.max(requiredCapacity, oldMesh.instanceMatrix.count * 2);
+      const nextMesh = new THREE.InstancedMesh(geometry, materials.dirt, capacity);
+      nextMesh.count = oldMesh.count;
+      nextMesh.instanceMatrix.array.set(oldMesh.instanceMatrix.array);
+      nextMesh.castShadow = oldMesh.castShadow;
+      nextMesh.receiveShadow = oldMesh.receiveShadow;
+      chunk.group.remove(oldMesh);
+      chunk.group.add(nextMesh);
+      chunk.columns.forEach((column) => column.blocks.forEach((block) => {
+        const instance = block.userData.terrainInstance;
+        if (instance && instance.mesh === oldMesh) instance.mesh = nextMesh;
+      }));
+      oldMesh.dispose?.();
+      chunk.dirtMesh = nextMesh;
+      return nextMesh;
+    }
+
+    function addTerrainBlock(chunk, column, blockId, centerY, supportLayerY = null) {
+      const isGrass = blockId === 'grass';
+      let mesh = isGrass ? chunk.grassMesh : chunk.dirtMesh;
+      let index;
+      if (isGrass) {
+        index = chunk.grassNextSlot++;
+      } else {
+        index = chunk.dirtFreeSlots.length ? chunk.dirtFreeSlots.pop() : chunk.dirtNextSlot++;
+      }
+      if (index >= mesh.instanceMatrix.count) {
+        if (isGrass) return null;
+        mesh = growDirtMesh(chunk, index + 1);
+      }
+      mesh.count = Math.max(mesh.count, index + 1);
+      setInstance(mesh, index, column.localX, centerY, column.localZ);
+
+      const blockDef = isGrass ? grassDef : dirtDef;
+      const block = {
+        position: new THREE.Vector3(column.x, centerY, column.z),
+        visible: true,
+        userData: {
+          isMinecraftBlock: true,
+          blockId,
+          blockDef,
+          maxHp: BLOCK_DURABILITY[blockId].baseHp,
+          currentHp: BLOCK_DURABILITY[blockId].baseHp,
+          terrainInstance: { chunk, mesh, index, blockId },
+          terrainColumn: column,
+          terrainSupportLayerY: supportLayerY
+        }
+      };
+      column.blocks.push(block);
+      placedBlocks.push(block);
+      return block;
+    }
+
+    function addSupportBlock(column, centerY) {
+      if (minedVoxels.has(voxelKey(column.x, centerY, column.z))) return null;
+      if (column.blocks.some((block) => Math.abs(block.position.y - centerY) < 0.01)) return null;
+      const block = addTerrainBlock(column.chunk, column, 'dirt', centerY, centerY);
+      saveColumnState(column);
+      return block;
+    }
+
+    function ensureSupportLayer(column, centerY) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dz = -1; dz <= 1; dz++) {
+          const neighbor = activeColumns.get(columnKey(column.x + dx, column.z + dz));
+          if (neighbor) addSupportBlock(neighbor, centerY);
+        }
+      }
+    }
+
+    function deactivateTerrainBlock(block) {
+      const instance = block.userData.terrainInstance;
+      if (!instance) return;
+      setInstance(instance.mesh, instance.index, 0, 0, 0, false);
+      if (instance.blockId === 'dirt') instance.chunk.dirtFreeSlots.push(instance.index);
+      block.visible = false;
+    }
+
+    function refreshColumnSurface(column) {
+      if (!column.blocks.length) {
+        column.surfaceY = null;
+        return;
+      }
+      const highest = column.blocks.reduce((best, block) =>
+        block.position.y > best.position.y ? block : best, column.blocks[0]);
+      column.surfaceY = highest.position.y + 0.5;
+    }
+
+    function saveColumnState(column) {
+      refreshColumnSurface(column);
+      storedColumnBlocks.set(columnKey(column.x, column.z), column.blocks.map((block) => ({
+        blockId: block.userData.blockId,
+        centerY: block.position.y,
+        supportLayerY: block.userData.terrainSupportLayerY
+      })));
+    }
+
+    function maintainTerrainColumn(column) {
+      saveColumnState(column);
+    }
+
+    function removeChunk(chunk) {
+      const chunkBlocks = new Set();
+      chunk.columns.forEach((column) => {
+        activeColumns.delete(columnKey(column.x, column.z));
+        column.blocks.forEach((block) => {
+          chunkBlocks.add(block);
+          if (block.userData.crackMesh) {
+            scene.remove(block.userData.crackMesh);
+            block.userData.crackMesh.geometry.dispose();
+            block.userData.crackMesh.material.dispose();
+          }
+        });
+      });
+      for (let i = placedBlocks.length - 1; i >= 0; i--) {
+        if (chunkBlocks.has(placedBlocks[i])) placedBlocks.splice(i, 1);
+      }
+      chunk.group.visible = false;
+      chunks.delete(chunk.key);
+      chunkPool.push(chunk);
+    }
+
+    function updateCenter(x, z) {
+      centerWorldX = x;
+      centerWorldZ = z;
+      const nextChunkX = Math.floor((x + chunkSize / 2) / chunkSize);
+      const nextChunkZ = Math.floor((z + chunkSize / 2) / chunkSize);
+      if (nextChunkX === centerChunkX && nextChunkZ === centerChunkZ) return;
+      centerChunkX = nextChunkX;
+      centerChunkZ = nextChunkZ;
+
+      const desired = new Set();
+      for (let dx = -chunkRadius; dx <= chunkRadius; dx++) {
+        for (let dz = -chunkRadius; dz <= chunkRadius; dz++) {
+          const chunkX = centerChunkX + dx;
+          const chunkZ = centerChunkZ + dz;
+          const key = `${chunkX},${chunkZ}`;
+          desired.add(key);
+        }
+      }
+      Array.from(chunks.values()).forEach((chunk) => {
+        if (!desired.has(chunk.key)) removeChunk(chunk);
+      });
+      desired.forEach((key) => {
+        if (chunks.has(key)) return;
+        const [chunkX, chunkZ] = key.split(',').map(Number);
+        chunks.set(key, createChunk(chunkX, chunkZ));
+      });
+    }
+
+    function setBounds(bounds) {
+      const unchanged = JSON.stringify(terrainBounds) === JSON.stringify(bounds || null);
+      if (unchanged) return;
+      terrainBounds = bounds || null;
+      Array.from(chunks.values()).forEach(removeChunk);
+      centerChunkX = null;
+      centerChunkZ = null;
+      updateCenter(centerWorldX, centerWorldZ);
+    }
+
+    function collidesWithTerrain(x, z, radius, height, feetY) {
+      const minX = Math.ceil(x - radius - 0.5);
+      const maxX = Math.floor(x + radius + 0.5);
+      const minZ = Math.ceil(z - radius - 0.5);
+      const maxZ = Math.floor(z + radius + 0.5);
+      for (let blockX = minX; blockX <= maxX; blockX++) {
+        for (let blockZ = minZ; blockZ <= maxZ; blockZ++) {
+          const column = activeColumns.get(columnKey(blockX, blockZ));
+          if (!column) continue;
+          for (const block of column.blocks) {
+            const top = block.position.y + 0.5;
+            const bottom = block.position.y - 0.5;
+            // Un bloc ne bloque pas si le personnage est déjà au-dessus,
+            // ou si sa tête reste entièrement sous le bloc.
+            if (feetY >= top - 0.05 || feetY + height <= bottom + 0.05) continue;
+            const closestX = Math.max(blockX - 0.5, Math.min(x, blockX + 0.5));
+            const closestZ = Math.max(blockZ - 0.5, Math.min(z, blockZ + 0.5));
+            if (Math.hypot(x - closestX, z - closestZ) < radius) return true;
+          }
+        }
+      }
+      return false;
+    }
+
+    updateCenter(options.centerX || 0, options.centerZ || 0);
+    mineableTerrain = {
+      updateCenter,
+      setBounds,
+      collidesWithTerrain,
+      getFloorHeight(x, z, radius = 0.32, currentY) {
+        let floor = -Infinity;
+        const minX = Math.ceil(x - radius - 0.5);
+        const maxX = Math.floor(x + radius + 0.5);
+        const minZ = Math.ceil(z - radius - 0.5);
+        const maxZ = Math.floor(z + radius + 0.5);
+        for (let blockX = minX; blockX <= maxX; blockX++) {
+          for (let blockZ = minZ; blockZ <= maxZ; blockZ++) {
+            const column = activeColumns.get(columnKey(blockX, blockZ));
+            if (!column || !Number.isFinite(column.surfaceY)
+              || (currentY !== undefined && currentY < column.surfaceY - 0.08)) continue;
+            if (column.surfaceY > floor) floor = column.surfaceY;
+          }
+        }
+        return Number.isFinite(floor) ? floor : null;
+      },
+      maintainColumn: maintainTerrainColumn,
+      ensureSupportLayer,
+      markVoxelMined(block) {
+        minedVoxels.add(voxelKey(block.position.x, block.position.y, block.position.z));
+      },
+      deactivateTerrainBlock
+    };
+    return mineableTerrain;
   }
 
   /**
@@ -327,13 +693,15 @@
 
       for (let attempt = 0; attempt < 30 && !center; attempt++) {
         const angle = Math.random() * Math.PI * 2;
-        const distance = 24 + Math.random() * 48;
+        const distance = 24 + Math.random() * 24;
         const x = Math.round(Math.cos(angle) * distance);
         const z = Math.round(Math.sin(angle) * distance);
         if (Math.hypot(x, z) < 18) continue;
 
         const overlapsBlocks = placedBlocks.some((block) =>
-          Math.abs(block.position.x - x) < radiusX + 2
+          !block.userData.terrainInstance
+          && !block.userData.vegetationInstance
+          && Math.abs(block.position.x - x) < radiusX + 2
           && Math.abs(block.position.z - z) < radiusZ + 2
         );
         if (!overlapsBlocks) center = { x, z };
@@ -349,7 +717,7 @@
   /**
    * Trouve le bloc directement en face du personnage
    */
-  function findBlockInFrontOfCharacter(character) {
+  function findBlockInFrontOfCharacter(character, predicate = null) {
     if (!character || !character.root) return null;
 
     const charPos = character.root.position;
@@ -367,6 +735,11 @@
     for (let i = 0; i < placedBlocks.length; i++) {
       const block = placedBlocks[i];
       if (!block.visible) continue;
+      if (predicate && !predicate(block)) continue;
+      const column = block.userData.terrainColumn;
+      if (column && column.blocks.some((other) => other !== block
+        && other.position.y > block.position.y
+        && other.position.y - block.position.y <= 1.01)) continue;
 
       const dx = block.position.x - charPos.x;
       const dy = block.position.y - (charPos.y + characterHeight / 2);
@@ -416,6 +789,7 @@
    * Secousse visuelle d'un bloc lors d'un coup
    */
   function triggerBlockShake(block) {
+    if (block.userData.terrainInstance || block.userData.vegetationInstance) return;
     if (block.userData.isShaking) return;
     block.userData.isShaking = true;
     block.userData.origScale = block.scale.clone();
@@ -677,7 +1051,11 @@
 
   function attemptIgniteBlock(character) {
     if (!character || !character.root || character.root.userData?.enteredPortal) return false;
-    return igniteBlock(findBlockInFrontOfCharacter(character));
+    const target = findBlockInFrontOfCharacter(character, (block) => {
+      const blockId = block.userData.blockId;
+      return blockId === 'tnt' || FLAMMABLE_BLOCKS.has(blockId);
+    });
+    return igniteBlock(target);
   }
 
   function spawnHitChips(scene, block, blockDef) {
@@ -722,6 +1100,10 @@
   function destroyAndExplodeBlock(block, blockDef, scene, collisionObstacles, options = {}) {
     const origin = block.position.clone();
     const blockId = block.userData.blockId || 'stone';
+    const terrainColumn = block.userData.terrainColumn;
+    const isTerrainBlock = Boolean(block.userData.terrainInstance);
+    const isVegetationBlock = Boolean(block.userData.vegetationInstance);
+    const nextSupportY = block.position.y - 1;
     const colors = getBlockColors(blockDef, blockId);
 
     removeBlockFire(block);
@@ -734,7 +1116,16 @@
       delete block.userData.crackMesh;
     }
 
-    scene.remove(block);
+    if (isTerrainBlock) {
+      const columnIndex = terrainColumn.blocks.indexOf(block);
+      if (columnIndex !== -1) terrainColumn.blocks.splice(columnIndex, 1);
+      mineableTerrain.markVoxelMined(block);
+      mineableTerrain.deactivateTerrainBlock(block);
+    } else if (isVegetationBlock) {
+      block.userData.vegetationInstance.remove();
+    } else {
+      scene.remove(block);
+    }
     const pIdx = placedBlocks.indexOf(block);
     if (pIdx !== -1) placedBlocks.splice(pIdx, 1);
 
@@ -742,8 +1133,8 @@
       const oIdx = collisionObstacles.indexOf(block.userData.collisionObstacle);
       if (oIdx !== -1) collisionObstacles.splice(oIdx, 1);
     }
-    if (block.geometry) block.geometry.dispose();
-    if (block.material) {
+    if (!isTerrainBlock && block.geometry) block.geometry.dispose();
+    if (!isTerrainBlock && block.material) {
       const mats = Array.isArray(block.material) ? block.material : [block.material];
       mats.forEach((material) => {
         if (!global.MinecraftBlocks?.isSharedBlockMaterial?.(material)) material.dispose();
@@ -759,7 +1150,7 @@
 
     const debrisCount = options.debrisCount !== undefined
       ? options.debrisCount
-      : blockId === 'tnt' ? 48 : 28;
+      : blockId === 'tnt' ? 48 : isTerrainBlock ? 8 : isVegetationBlock ? 4 : 28;
 
     for (let i = 0; i < debrisCount; i++) {
       const col = colors[Math.floor(Math.random() * colors.length)];
@@ -795,7 +1186,7 @@
       });
     }
 
-    const dustCount = 10;
+    const dustCount = isTerrainBlock ? 3 : isVegetationBlock ? 2 : 10;
     for (let i = 0; i < dustCount; i++) {
       const dustMat = new global.THREE.MeshBasicMaterial({
         color: 0xe6e0ed,
@@ -827,6 +1218,11 @@
         maxLife: 0.9
       });
     }
+
+    if (isTerrainBlock && terrainColumn) {
+      mineableTerrain.ensureSupportLayer(terrainColumn, nextSupportY);
+      mineableTerrain.maintainColumn(terrainColumn);
+    }
   }
 
   function detonateTnt(tntBlock) {
@@ -836,14 +1232,22 @@
     const affectedBlocks = placedBlocks.filter((block) =>
       block.visible && block.position.distanceTo(origin) <= blastRadius
     );
+    const affectedHouses = new Set();
     playMinecraftSound('tnt', 'break');
 
     affectedBlocks.forEach((block) => {
+      if (block.userData.villagerHouse) affectedHouses.add(block.userData.villagerHouse);
       const blockDef = block.userData.blockDef || global.MinecraftBlocks?.get(block.userData.blockId);
       destroyAndExplodeBlock(block, blockDef, worldScene, worldCollisionObstacles, {
         skipSound: true,
         debrisCount: block === tntBlock ? 48 : 2
       });
+    });
+
+    affectedHouses.forEach((house) => {
+      if (house.flammableBlocks.every((houseBlock) => !placedBlocks.includes(houseBlock))) {
+        replaceBurnedVillagerHouse(house);
+      }
     });
   }
 
@@ -1049,25 +1453,53 @@
     const px = Math.round(charPos.x + dirX * 1.35);
     const pz = Math.round(charPos.z + dirZ * 1.35);
 
-    // Détection du bloc le plus haut déjà présent à ces coordonnées (px, pz)
-    let highestY = -1;
+    // Niveaux occupés à l’emplacement visé. Le bloc peut se trouver sous le
+    // niveau zéro quand le joueur construit ou bouche un trou.
+    const occupiedLevels = new Set();
+    let highestY = -Infinity;
+    let lowestY = Infinity;
     for (let i = 0; i < placedBlocks.length; i++) {
       const b = placedBlocks[i];
-      if (!b.visible) continue;
+      if (!b.visible || b.userData.vegetationInstance) continue;
       if (Math.round(b.position.x) === px && Math.round(b.position.z) === pz) {
-        const by = Math.round(b.position.y - 0.5);
-        if (by > highestY) {
-          highestY = by;
+        const level = Math.round(b.position.y - 0.5);
+        occupiedLevels.add(level);
+        highestY = Math.max(highestY, level);
+        lowestY = Math.min(lowestY, level);
+      }
+    }
+
+    const playerLevel = Math.round(charPos.y);
+    let targetY = null;
+
+    if (occupiedLevels.size) {
+      // Sous le joueur : remplir le premier vide qui a déjà un bloc de
+      // soutien plus bas. Les cases excavées restent vides à leur niveau.
+      for (let level = playerLevel - 1; level > lowestY; level--) {
+        if (!occupiedLevels.has(level) && occupiedLevels.has(level - 1)) {
+          targetY = level;
+          break;
+        }
+      }
+
+      // Au niveau du joueur ou au-dessus : remplir un vide seulement s’il est
+      // soutenu en dessous et relié à un bloc plus haut.
+      if (targetY === null) {
+        for (let level = playerLevel; level < highestY; level++) {
+          if (!occupiedLevels.has(level) && occupiedLevels.has(level - 1)) {
+            targetY = level;
+            break;
+          }
         }
       }
     }
 
-    // Si un bloc existe déjà, on empile au-dessus (highestY + 1), sinon au sol
-    let targetY = 0;
-    if (highestY >= 0) {
-      targetY = highestY + 1;
-    } else {
-      targetY = Math.max(0, Math.round(charPos.y));
+    // Aucun trou utile devant le joueur : conserver la pose classique au
+    // sommet de la pile, ou au sol si l’emplacement est vide.
+    if (targetY === null) {
+      targetY = occupiedLevels.size
+        ? highestY + 1
+        : Math.max(0, playerLevel);
     }
 
     // Pose du bloc
@@ -1110,16 +1542,22 @@
     }
   }
 
-  function findReplacementHouseSite() {
+  function findReplacementHouseSite(previousHouse) {
     const villager = characterEntities.find((entity) => entity && entity.isVillager);
+    const previousDistance = previousHouse
+      ? Math.hypot(previousHouse.centerX, previousHouse.centerZ)
+      : 16;
+    const minDistance = Math.max(30, previousDistance + 14);
+    const maxDistance = minDistance + 16;
 
     for (let attempt = 0; attempt < 120; attempt++) {
       const angle = Math.random() * Math.PI * 2;
       // Les arbres décoratifs forment une couronne d’environ 28 à 47 blocs autour du spawn.
-      const distance = 30 + Math.random() * 16;
+      const distance = minDistance + Math.random() * (maxDistance - minDistance);
       const x = Math.round(Math.cos(angle) * distance);
       const z = Math.round(Math.sin(angle) * distance);
       const overlapsBlocks = placedBlocks.some((block) => block.visible
+        && !block.userData.terrainInstance && !block.userData.vegetationInstance
         && block.position.y < 4.5
         && Math.abs(block.position.x - x) < 4
         && Math.abs(block.position.z - z) < 4);
@@ -1129,7 +1567,7 @@
     }
 
     const angle = Math.random() * Math.PI * 2;
-    const distance = 40;
+    const distance = minDistance;
     return {
       x: Math.round(Math.cos(angle) * distance),
       z: Math.round(Math.sin(angle) * distance)
@@ -1160,7 +1598,7 @@
     house.rebuilding = true;
     house.blocks.forEach(removeHouseBlock);
 
-    const site = findReplacementHouseSite();
+    const site = findReplacementHouseSite(house);
     buildVillagerHouse(global.THREE, worldScene, worldCollisionObstacles, site.x, site.z);
     const villager = characterEntities.find((entity) => entity && entity.isVillager);
     if (villager) {
@@ -1215,6 +1653,34 @@
     const swing = Math.sin(route.elapsed * 12) * 0.45;
     villager.legs[0].rotation.x = swing;
     villager.legs[1].rotation.x = -swing;
+  }
+
+  function registerMineableVegetation(field) {
+    const vegetationBlocks = field?.getMineableBlocks?.() || [];
+    vegetationBlocks.forEach((block) => {
+      if (block && !placedBlocks.includes(block)) placedBlocks.push(block);
+    });
+    return vegetationBlocks.length;
+  }
+
+  function updateVillagerPhysics(delta) {
+    const villager = characterEntities.find((entity) => entity && entity.isVillager);
+    if (!villager || villager.hitReaction || !global.MinecraftCharacterModel) return;
+
+    global.MinecraftCharacterModel.updateJump(villager, delta, worldCollisionObstacles);
+
+    const root = villager.root;
+    const localFloor = mineableTerrain?.getFloorHeight(
+      root.position.x, root.position.z, villager.collisionRadius || 0.38, root.position.y
+    );
+    const nearbyFloor = mineableTerrain?.getFloorHeight(root.position.x, root.position.z, 1.15);
+    if (Number.isFinite(localFloor) && Number.isFinite(nearbyFloor)
+      && nearbyFloor > localFloor + 0.5
+      && Math.abs(root.position.y - localFloor) < 0.08
+      && root.userData.jumpVelocity <= 0) {
+      global.MinecraftCharacterModel.startJump(villager, worldCollisionObstacles);
+      global.MinecraftCharacterModel.stopJump(villager);
+    }
   }
 
   function updateBurningBlocks(delta, time) {
@@ -1293,6 +1759,7 @@
 
   function update(delta, time) {
     updateBurningBlocks(delta, time);
+    updateVillagerPhysics(delta);
 
     // Actions maintenues
     if (characterAlex && characterAlex.weaponAttackHeld) {
@@ -1382,6 +1849,9 @@
 
   global.MinecraftBlockWorld = {
     spawnBlock,
+    createMineableTerrain,
+    registerMineableVegetation,
+    getTerrainFloorHeight: (...args) => mineableTerrain ? mineableTerrain.getFloorHeight(...args) : null,
     buildVillagerHouse,
     buildDecorativeStructures,
     addVoxelTree,

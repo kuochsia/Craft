@@ -40,6 +40,8 @@
   function createVillager(THREE) {
     const root = new THREE.Group();
     root.scale.setScalar(VILLAGER_HEIGHT / MODEL_SOURCE_HEIGHT);
+    root.userData.jumpVelocity = 0;
+    root.userData.jumpHeld = false;
 
     // --- MATÉRIAUX DE BASE ---
     const skinMat = new THREE.MeshLambertMaterial({ color: 0x86604e });

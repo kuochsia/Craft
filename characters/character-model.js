@@ -133,8 +133,9 @@
   }
 
   function getFloorHeightAt(x, z, obstacles, currentY) {
-    let maxFloor = 0; // Sol naturel à y = 0
     const charRadius = 0.32;
+    const terrainFloor = global.MinecraftBlockWorld?.getTerrainFloorHeight?.(x, z, charRadius, currentY);
+    let maxFloor = Number.isFinite(terrainFloor) ? terrainFloor : 0;
 
     if (!obstacles || !Array.isArray(obstacles)) return maxFloor;
 
@@ -318,6 +319,16 @@
             }
           }
         }
+      }
+
+      if (global.MinecraftBlockWorld?.collidesWithTerrain?.(
+        x,
+        z,
+        character.collisionRadius || radius,
+        character.collisionHeight || CHARACTER_HEIGHT,
+        currentY
+      )) {
+        return false;
       }
 
       if (!obstacles || !Array.isArray(obstacles)) return true;

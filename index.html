@@ -332,6 +332,7 @@
   <!-- Système et Blocs de matières 3D -->
   <script src="blocks/blocks.js"></script>
   <script src="blocks/grass.js"></script>
+  <script src="blocks/dirt.js"></script>
   <script src="blocks/stone.js"></script>
   <script src="blocks/oak-wood.js"></script>
   <script src="blocks/oak-planks.js"></script>
@@ -358,6 +359,7 @@
     const worldUrlParams = new URLSearchParams(window.location.search);
     let isInfiniteWorld = worldUrlParams.get('infinite') === 'true';
     let isSplitCameraMode = false;
+    let terrain = null;
     const infiniteWorldToggle = document.getElementById('infinite-world-toggle');
     const splitCameraToggle = document.getElementById('split-camera-toggle');
     const splitCameraDivider = document.getElementById('split-camera-divider');
@@ -369,10 +371,14 @@
       currentUrl.searchParams.set('infinite', String(isInfiniteWorld));
       window.history.replaceState(null, '', currentUrl);
       if (!isInfiniteWorld) {
-        ground.position.x = 0;
-        ground.position.z = 0;
         vegetation.restoreFinite();
       }
+      terrain?.setBounds(isInfiniteWorld ? null : {
+        minX: -(worldSize / 2 - 1),
+        maxX: worldSize / 2 - 1,
+        minZ: -(worldSize / 2 - 1),
+        maxZ: worldSize / 2 - 1
+      });
     });
 
     function getWorldUrl(fileName) {
@@ -529,20 +535,25 @@
     /* ==========================================================
        3. DÉCOR ÉPURÉ
        ========================================================== */
-    const groundGeo = new THREE.BoxGeometry(500, 2, 500);
-    const grassTopMat = new THREE.MeshLambertMaterial({ color: 0x76b62c });
-    const dirtMat = new THREE.MeshLambertMaterial({ color: 0x5c3e23 });
-    const ground = new THREE.Mesh(groundGeo, [dirtMat, dirtMat, grassTopMat, dirtMat, dirtMat, dirtMat]);
-    ground.position.y = -1;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    const worldSize = 500;
     const collisionObstacles = [];
+    terrain = window.MinecraftBlockWorld.createMineableTerrain(THREE, scene, collisionObstacles, {
+      chunkSize: 24,
+      chunkRadius: 2,
+      bounds: isInfiniteWorld ? null : {
+        minX: -(worldSize / 2 - 1),
+        maxX: worldSize / 2 - 1,
+        minZ: -(worldSize / 2 - 1),
+        maxZ: worldSize / 2 - 1
+      }
+    });
 
     function addBirch(x, z) {
       window.MinecraftBlockWorld.addVoxelTree(THREE, scene, collisionObstacles, x, z, 4);
     }
 
     const vegetation = window.MinecraftVegetation.createField(THREE, scene, 180);
+    window.MinecraftBlockWorld.registerMineableVegetation(vegetation);
 
     function randomWorldPosition(centerX, centerZ, minRadius, maxRadius) {
       const angle = Math.random() * Math.PI * 2;
@@ -935,6 +946,60 @@
     const clock = new THREE.Clock();
     const targetFrameInterval = 1000 / 30;
     let lastFrameTime = 0;
+    const worldLimit = worldSize / 2 - 1;
+    const respawnPositions = new Map([
+      [alex, new THREE.Vector3(-1.15, 0, 0)],
+      [steve, new THREE.Vector3(1.15, 0, 0)]
+    ]);
+
+    function beginWorldFall(character) {
+      if (character.fallState) return;
+      character.fallState = {
+        elapsed: 0,
+        velocityY: 0,
+        tiltDirection: character.root.position.x < 0 ? -1 : 1
+      };
+      character.isMoving = false;
+      window.MinecraftCharacterModel.stopJump(character);
+      character.root.userData.jumpVelocity = 0;
+    }
+
+    function updateWorldFall(character, delta) {
+      const root = character.root;
+      if (!character.fallState && ((!isInfiniteWorld
+        && Math.max(Math.abs(root.position.x), Math.abs(root.position.z)) > worldLimit)
+        || root.position.y < -24)) {
+        beginWorldFall(character);
+      }
+
+      if (!character.fallState) {
+        window.MinecraftCharacterModel.updateJump(character, delta, collisionObstacles);
+        return;
+      }
+
+      const fall = character.fallState;
+      const step = Math.min(delta, 0.05);
+      fall.elapsed += delta;
+      fall.velocityY += 20 * step;
+      root.position.y -= fall.velocityY * step;
+      root.rotation.x += step * 0.8;
+      root.rotation.z += fall.tiltDirection * step * 0.45;
+
+      if (fall.elapsed >= 2) {
+        root.position.copy(respawnPositions.get(character));
+        root.rotation.x = 0;
+        root.rotation.z = 0;
+        root.userData.jumpVelocity = 0;
+        root.userData.jumpHeld = false;
+        character.isMoving = false;
+        character.leftLegPivot.rotation.x = 0;
+        character.rightLegPivot.rotation.x = 0;
+        character.leftArmPivot.rotation.set(0, 0, 0);
+        character.rightArmPivot.rotation.set(0, 0, 0);
+        character.fallState = null;
+      }
+    }
+
     function renderLoop(frameTime) {
       if (document.hidden) return;
       requestAnimationFrame(renderLoop);
@@ -942,8 +1007,8 @@
       lastFrameTime = frameTime;
       const delta = Math.min(clock.getDelta(), 0.05);
       const time = clock.getElapsedTime();
-      window.MinecraftCharacterModel.updateJump(alex, delta, collisionObstacles);
-      window.MinecraftCharacterModel.updateJump(steve, delta, collisionObstacles);
+      updateWorldFall(alex, delta);
+      updateWorldFall(steve, delta);
 
       if (window.MinecraftBlockWorld && window.MinecraftBlockWorld.update) {
         window.MinecraftBlockWorld.update(delta, time);
@@ -991,7 +1056,7 @@
 
       // 2. DÉPLACEMENT D'ALEX (TOUCHES Z, Q, S, D)
       let alexMoving = false;
-      if (!alex.root.userData.enteredPortal) {
+      if (!alex.root.userData.enteredPortal && !alex.fallState) {
         alexMoving = cameraControls.move('alex', {
           left: keys['q'] || keys['arrowleft'],
           right: keys['d'] || keys['arrowright'],
@@ -1024,7 +1089,7 @@
 
       // 3. DÉPLACEMENT DE STEVE (TOUCHES O, K, L, M)
       let steveMoving = false;
-      if (!steve.root.userData.enteredPortal) {
+      if (!steve.root.userData.enteredPortal && !steve.fallState) {
         steveMoving = cameraControls.move('steve', {
           left: keys['k'],
           right: keys['m'],
@@ -1062,22 +1127,6 @@
             steve, separationX * correction, separationZ * correction, collisionObstacles
           );
         }
-      }
-
-      if (!isInfiniteWorld) {
-        const worldLimit = groundGeo.parameters.width / 2 - 1;
-        [alex, steve].filter((character) => !character.root.userData.enteredPortal).forEach((character) => {
-          character.root.position.x = THREE.MathUtils.clamp(
-            character.root.position.x,
-            -worldLimit,
-            worldLimit
-          );
-          character.root.position.z = THREE.MathUtils.clamp(
-            character.root.position.z,
-            -worldLimit,
-            worldLimit
-          );
-        });
       }
 
       if (endPortal) {
@@ -1163,10 +1212,7 @@
       updateCamera(delta, targetX, targetZ, characterSeparation);
       camera.updateMatrixWorld();
 
-      if (isInfiniteWorld) {
-        ground.position.x = targetX;
-        ground.position.z = targetZ;
-      }
+      terrain.updateCenter(targetX, targetZ);
       cloudLayer.position.set(targetX, 0, targetZ);
       sun.target.position.set(targetX, 0, targetZ);
       sun.position.set(targetX + 14, 24, targetZ + 12);

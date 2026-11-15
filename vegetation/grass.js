@@ -117,7 +117,7 @@
 
     function updatePlant(plant) {
       for (let panel = 0; panel < 2; panel++) {
-        const size = plant.panelScales[panel] * plant.growScale;
+        const size = plant.alive ? plant.panelScales[panel] * plant.growScale : 0;
         position.set(plant.position.x, preset.panelHeight * size / 2, plant.position.z);
         rotation.setFromAxisAngle(up, plant.rotation + panel * Math.PI / 2);
         scale.set(size, size, size);
@@ -125,6 +125,7 @@
         instances.setMatrixAt(plant.instanceIndex + panel, matrix);
       }
       instances.instanceMatrix.needsUpdate = true;
+      if (plant.mineableBlock) plant.mineableBlock.visible = plant.alive;
     }
 
     function randomPosition(centerX, centerZ, minRadius, maxRadius) {
@@ -139,15 +140,36 @@
 
     for (let i = 0; i < count; i++) {
       const plant = {
-        position: randomPosition(0, 0, 7, 75),
+        position: randomPosition(0, 0, 7, 55),
         finitePosition: null,
         rotation: Math.random() * Math.PI,
         panelScales: [0.55 + Math.random() * 0.8, 0.55 + Math.random() * 0.8],
         growScale: 1,
         growProgress: null,
-        instanceIndex: i * 2
+        instanceIndex: i * 2,
+        alive: true
       };
       plant.finitePosition = plant.position.clone();
+      plant.mineableBlock = {
+        position: plant.position,
+        visible: true,
+        userData: {
+          isMinecraftBlock: true,
+          blockId: 'leaves',
+          blockDef: global.MinecraftBlocks?.get('leaves') || null,
+          maxHp: 0.75,
+          currentHp: 0.75,
+          vegetationInstance: {
+            remove() {
+              if (!plant.alive) return;
+              plant.alive = false;
+              plant.growScale = 0;
+              plant.growProgress = null;
+              updatePlant(plant);
+            }
+          }
+        }
+      };
       plants.push(plant);
       updatePlant(plant);
     }
@@ -156,6 +178,7 @@
       update(delta, targetX, targetZ, infinite, camera) {
         let changed = false;
         for (const plant of plants) {
+          if (!plant.alive) continue;
           if (infinite
             && Math.hypot(plant.position.x - targetX, plant.position.z - targetZ) > 82) {
             projected.set(plant.position.x, 2.5, plant.position.z).project(camera);
@@ -181,11 +204,15 @@
       },
       restoreFinite() {
         for (const plant of plants) {
+          if (!plant.alive) continue;
           plant.position.copy(plant.finitePosition);
           plant.growScale = 1;
           plant.growProgress = null;
           updatePlant(plant);
         }
+      },
+      getMineableBlocks() {
+        return plants.map((plant) => plant.mineableBlock);
       }
     };
   }

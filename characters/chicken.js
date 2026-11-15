@@ -246,7 +246,8 @@
     root.rotation.y = ai.targetYaw;
 
     function getFloorHeight(x, z, obstacles, currentY) {
-      let maxFloor = 0;
+      const terrainFloor = global.MinecraftBlockWorld?.getTerrainFloorHeight?.(x, z, HITBOX_RADIUS, currentY);
+      let maxFloor = Number.isFinite(terrainFloor) ? terrainFloor : 0;
       if (!obstacles || !Array.isArray(obstacles)) return maxFloor;
 
       for (let i = 0; i < obstacles.length; i++) {
