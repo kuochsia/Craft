@@ -98,7 +98,7 @@
     });
   }
 
-  function createField(THREE, scene, count = 180) {
+  function createField(THREE, scene, count = 180, terrainDesign = null) {
     const preset = getPreset();
     const geometry = new THREE.PlaneGeometry(preset.panelWidth, preset.panelHeight);
     const material = createMaterial(THREE, preset);
@@ -118,7 +118,7 @@
     function updatePlant(plant) {
       for (let panel = 0; panel < 2; panel++) {
         const size = plant.alive ? plant.panelScales[panel] * plant.growScale : 0;
-        position.set(plant.position.x, preset.panelHeight * size / 2, plant.position.z);
+        position.set(plant.position.x, plant.position.y + preset.panelHeight * size / 2, plant.position.z);
         rotation.setFromAxisAngle(up, plant.rotation + panel * Math.PI / 2);
         scale.set(size, size, size);
         matrix.compose(position, rotation, scale);
@@ -129,13 +129,18 @@
     }
 
     function randomPosition(centerX, centerZ, minRadius, maxRadius) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = minRadius + Math.random() * (maxRadius - minRadius);
-      return new THREE.Vector3(
-        centerX + Math.cos(angle) * radius,
-        0,
-        centerZ + Math.sin(angle) * radius
-      );
+      for (let attempt = 0; attempt < 80; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const radius = minRadius + Math.random() * (maxRadius - minRadius);
+        const x = centerX + Math.cos(angle) * radius;
+        const z = centerZ + Math.sin(angle) * radius;
+        if (terrainDesign?.isWaterAt?.(x, z)) continue;
+        const height = terrainDesign?.getSurfaceHeightAt?.(x, z);
+        if (terrainDesign && !Number.isFinite(height)) continue;
+        return new THREE.Vector3(x, Number.isFinite(height) ? height : 0, z);
+      }
+      const height = terrainDesign?.getSurfaceHeightAt?.(centerX, centerZ);
+      return new THREE.Vector3(centerX, Number.isFinite(height) ? height : 0, centerZ);
     }
 
     for (let i = 0; i < count; i++) {

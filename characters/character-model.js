@@ -279,7 +279,8 @@
 
   function moveWithCollisions(character, deltaX, deltaZ, obstacles, otherCharacters) {
     const root = character.root;
-    const radius = 0.38;
+    const radius = character.collisionRadius || 0.38;
+    const height = character.collisionHeight || CHARACTER_HEIGHT;
     const startX = root.position.x;
     const startZ = root.position.z;
     const currentY = root.position.y;
@@ -302,7 +303,7 @@
         // (permet par exemple de sauter par-dessus un poulet)
         const verticallyOverlaps =
           currentY < otherY + hitbox.height - 0.15 &&
-          currentY + CHARACTER_HEIGHT > otherY + 0.1;
+          currentY + height > otherY + 0.1;
 
         if (verticallyOverlaps) {
           const minDist = radius + hitbox.radius;
@@ -324,8 +325,8 @@
       if (global.MinecraftBlockWorld?.collidesWithTerrain?.(
         x,
         z,
-        character.collisionRadius || radius,
-        character.collisionHeight || CHARACTER_HEIGHT,
+        radius,
+        height,
         currentY
       )) {
         return false;
@@ -341,34 +342,59 @@
 
         // 1. Si les pieds du personnage sont au niveau ou au-dessus du haut du bloc,
         //    ce bloc ne bloque pas horizontalement : le personnage peut marcher dessus !
-        if (currentY >= obsTop - 0.25) {
+        if (currentY >= obsTop - 0.005) {
           return false;
         }
 
         // 2. Si la tête du personnage est sous le bas du bloc (obstacle en hauteur),
         //    il ne bloque pas horizontalement non plus.
-        if (currentY + CHARACTER_HEIGHT <= obsBottom) {
+        if (currentY + height <= obsBottom) {
           return false;
         }
 
         // 3. Collision horizontale contre le flanc de l'obstacle
-        const closestX = Math.max(
-          obstacle.position.x - obstacle.halfWidth,
-          Math.min(x, obstacle.position.x + obstacle.halfWidth)
-        );
-        const closestZ = Math.max(
-          obstacle.position.z - obstacle.halfDepth,
-          Math.min(z, obstacle.position.z + obstacle.halfDepth)
-        );
-        return Math.hypot(x - closestX, z - closestZ) < radius;
+        return x + radius > obstacle.position.x - obstacle.halfWidth
+          && x - radius < obstacle.position.x + obstacle.halfWidth
+          && z + radius > obstacle.position.z - obstacle.halfDepth
+          && z - radius < obstacle.position.z + obstacle.halfDepth;
       });
     }
 
-    const nextX = root.position.x + deltaX;
-    if (canOccupy(nextX, root.position.z)) root.position.x = nextX;
+    function moveAxis(axis, amount) {
+      const start = root.position[axis];
+      if (!amount) return;
+      const steps = Math.max(1, Math.ceil(Math.abs(amount) / 0.2));
+      let safe = start;
 
-    const nextZ = root.position.z + deltaZ;
-    if (canOccupy(root.position.x, nextZ)) root.position.z = nextZ;
+      for (let step = 1; step <= steps; step++) {
+        const candidate = start + amount * step / steps;
+        const x = axis === 'x' ? candidate : root.position.x;
+        const z = axis === 'z' ? candidate : root.position.z;
+        if (canOccupy(x, z)) {
+          safe = candidate;
+          continue;
+        }
+
+        // Cherche la limite du bloc pour éviter à la fois le traverser et
+        // laisser un grand espace lorsque le déplacement est rapide.
+        let low = safe;
+        let high = candidate;
+        for (let iteration = 0; iteration < 6; iteration++) {
+          const middle = (low + high) / 2;
+          const testX = axis === 'x' ? middle : root.position.x;
+          const testZ = axis === 'z' ? middle : root.position.z;
+          if (canOccupy(testX, testZ)) low = middle;
+          else high = middle;
+        }
+        safe = low;
+        break;
+      }
+
+      root.position[axis] = safe;
+    }
+
+    moveAxis('x', deltaX);
+    moveAxis('z', deltaZ);
     return root.position.x !== startX || root.position.z !== startZ;
   }
 

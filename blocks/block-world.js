@@ -152,6 +152,8 @@
     const chunkSize = options.chunkSize || 24;
     const chunkRadius = options.chunkRadius === undefined ? 1 : options.chunkRadius;
     const cellCount = chunkSize * chunkSize;
+    const initialLayerCapacity = Math.max(2, options.initialLayerCapacity || 2);
+    const staticWorld = options.staticWorld === true;
     const grassDef = global.MinecraftBlocks.get('grass');
     const dirtDef = global.MinecraftBlocks.get('dirt');
     if (!grassDef || !dirtDef) throw new Error('Les blocs grass et dirt doivent être chargés avant le terrain.');
@@ -238,7 +240,9 @@
       let chunk = chunkPool.pop();
       const group = chunk ? chunk.group : new THREE.Group();
       const grassMesh = chunk ? chunk.grassMesh : new THREE.InstancedMesh(geometry, materials.grass, cellCount);
-      const dirtMesh = chunk ? chunk.dirtMesh : new THREE.InstancedMesh(geometry, materials.dirt, cellCount * 2);
+      const dirtMesh = chunk ? chunk.dirtMesh : new THREE.InstancedMesh(
+        geometry, materials.dirt, cellCount * Math.max(2, initialLayerCapacity - 1)
+      );
       grassMesh.count = 0;
       dirtMesh.count = 0;
       grassMesh.castShadow = dirtMesh.castShadow = false;
@@ -274,6 +278,8 @@
           const z = originZ + localZ;
           if (terrainBounds && (x < terrainBounds.minX || x > terrainBounds.maxX
             || z < terrainBounds.minZ || z > terrainBounds.maxZ)) continue;
+          if (terrainBounds?.radius !== undefined
+            && Math.hypot(x - (terrainBounds.centerX || 0), z - (terrainBounds.centerZ || 0)) > terrainBounds.radius) continue;
           const key = columnKey(x, z);
           const savedBlocks = storedColumnBlocks.get(key);
           const column = { x, z, localX, localZ, surfaceY: 0, blocks: [], chunk };
@@ -286,9 +292,16 @@
             ));
             refreshColumnSurface(column);
           } else {
-            column.surfaceY = 0;
-            addTerrainBlock(chunk, column, 'grass', -0.5);
-            addTerrainBlock(chunk, column, 'dirt', -1.5);
+            const surfaceY = Number.isFinite(options.surfaceHeightAt?.(x, z))
+              ? options.surfaceHeightAt(x, z)
+              : 0;
+            const minimumLevel = Number.isFinite(options.minimumLevelAt?.(x, z, surfaceY))
+              ? options.minimumLevelAt(x, z, surfaceY)
+              : Number.isFinite(options.minimumLevel) ? options.minimumLevel : -1;
+            column.surfaceY = surfaceY;
+            for (let level = surfaceY; level >= minimumLevel; level--) {
+              addTerrainBlock(chunk, column, level === surfaceY ? 'grass' : 'dirt', level - 0.5);
+            }
           }
         }
       }
@@ -422,6 +435,7 @@
     function updateCenter(x, z) {
       centerWorldX = x;
       centerWorldZ = z;
+      if (staticWorld) return;
       const nextChunkX = Math.floor((x + chunkSize / 2) / chunkSize);
       const nextChunkZ = Math.floor((z + chunkSize / 2) / chunkSize);
       if (nextChunkX === centerChunkX && nextChunkZ === centerChunkZ) return;
@@ -454,7 +468,34 @@
       Array.from(chunks.values()).forEach(removeChunk);
       centerChunkX = null;
       centerChunkZ = null;
-      updateCenter(centerWorldX, centerWorldZ);
+      if (staticWorld && terrainBounds) {
+        createBoundedChunks();
+      } else {
+        updateCenter(centerWorldX, centerWorldZ);
+      }
+    }
+
+    function createBoundedChunks() {
+      if (!terrainBounds) return;
+      const minChunkX = Math.floor((terrainBounds.minX + chunkSize / 2) / chunkSize);
+      const maxChunkX = Math.floor((terrainBounds.maxX + chunkSize / 2) / chunkSize);
+      const minChunkZ = Math.floor((terrainBounds.minZ + chunkSize / 2) / chunkSize);
+      const maxChunkZ = Math.floor((terrainBounds.maxZ + chunkSize / 2) / chunkSize);
+      for (let chunkX = minChunkX; chunkX <= maxChunkX; chunkX++) {
+        for (let chunkZ = minChunkZ; chunkZ <= maxChunkZ; chunkZ++) {
+          if (terrainBounds.radius !== undefined) {
+            const centerX = terrainBounds.centerX || 0;
+            const centerZ = terrainBounds.centerZ || 0;
+            const originX = chunkX * chunkSize - chunkSize / 2;
+            const originZ = chunkZ * chunkSize - chunkSize / 2;
+            const nearestX = Math.max(originX, Math.min(centerX, originX + chunkSize - 1));
+            const nearestZ = Math.max(originZ, Math.min(centerZ, originZ + chunkSize - 1));
+            if (Math.hypot(nearestX - centerX, nearestZ - centerZ) > terrainBounds.radius) continue;
+          }
+          const key = `${chunkX},${chunkZ}`;
+          if (!chunks.has(key)) chunks.set(key, createChunk(chunkX, chunkZ));
+        }
+      }
     }
 
     function collidesWithTerrain(x, z, radius, height, feetY) {
@@ -471,21 +512,59 @@
             const bottom = block.position.y - 0.5;
             // Un bloc ne bloque pas si le personnage est déjà au-dessus,
             // ou si sa tête reste entièrement sous le bloc.
-            if (feetY >= top - 0.05 || feetY + height <= bottom + 0.05) continue;
-            const closestX = Math.max(blockX - 0.5, Math.min(x, blockX + 0.5));
-            const closestZ = Math.max(blockZ - 0.5, Math.min(z, blockZ + 0.5));
-            if (Math.hypot(x - closestX, z - closestZ) < radius) return true;
+            if (feetY >= top - 0.005 || feetY + height <= bottom + 0.005) continue;
+            const overlapsX = x + radius > blockX - 0.5 && x - radius < blockX + 0.5;
+            const overlapsZ = z + radius > blockZ - 0.5 && z - radius < blockZ + 0.5;
+            if (overlapsX && overlapsZ) return true;
           }
         }
       }
       return false;
     }
 
-    updateCenter(options.centerX || 0, options.centerZ || 0);
+    if (staticWorld && terrainBounds) {
+      createBoundedChunks();
+      centerChunkX = Math.floor(((options.centerX || 0) + chunkSize / 2) / chunkSize);
+      centerChunkZ = Math.floor(((options.centerZ || 0) + chunkSize / 2) / chunkSize);
+    } else {
+      updateCenter(options.centerX || 0, options.centerZ || 0);
+    }
     mineableTerrain = {
       updateCenter,
       setBounds,
       collidesWithTerrain,
+      hasHeightMap: typeof options.surfaceHeightAt === 'function',
+      houseAreaRadius: Number.isFinite(options.houseAreaRadius) ? options.houseAreaRadius : null,
+      isWaterAt: (x, z) => Boolean(options.isWaterAt?.(x, z)),
+      clampToBounds(x, z, margin = 0) {
+        if (!terrainBounds) return { x, z };
+        if (terrainBounds.radius !== undefined) {
+          const centerX = terrainBounds.centerX || 0;
+          const centerZ = terrainBounds.centerZ || 0;
+          const maxRadius = Math.max(0, terrainBounds.radius - margin);
+          const dx = x - centerX;
+          const dz = z - centerZ;
+          const distance = Math.hypot(dx, dz);
+          if (distance <= maxRadius || distance === 0) return { x, z };
+          const scale = maxRadius / distance;
+          return { x: centerX + dx * scale, z: centerZ + dz * scale };
+        }
+        return {
+          x: Math.max(terrainBounds.minX + margin, Math.min(terrainBounds.maxX - margin, x)),
+          z: Math.max(terrainBounds.minZ + margin, Math.min(terrainBounds.maxZ - margin, z))
+        };
+      },
+      notifyColumnChanged(column) {
+        options.onTerrainColumnChanged?.(column.x, column.z, column.surfaceY);
+      },
+      getSurfaceHeightAt(x, z) {
+        const blockX = Math.round(x);
+        const blockZ = Math.round(z);
+        const column = activeColumns.get(columnKey(blockX, blockZ));
+        if (column && Number.isFinite(column.surfaceY)) return column.surfaceY;
+        const generatedHeight = options.surfaceHeightAt?.(blockX, blockZ);
+        return Number.isFinite(generatedHeight) ? generatedHeight : null;
+      },
       getFloorHeight(x, z, radius = 0.32, currentY) {
         let floor = -Infinity;
         const minX = Math.ceil(x - radius - 0.5);
@@ -515,17 +594,17 @@
   /**
    * Construit un arbre voxel en blocs de bois superposés et feuillage en feuilles transparentes
    */
-  function buildVoxelTree(THREE, scene, collisionObstacles, x, z, trunkHeight = 4) {
+  function buildVoxelTree(THREE, scene, collisionObstacles, x, z, trunkHeight = 4, baseY = 0) {
     const rx = Math.round(x);
     const rz = Math.round(z);
 
     // 1. Tronc en blocs de bois
     for (let y = 0; y < trunkHeight; y++) {
-      spawnBlock(THREE, scene, collisionObstacles, 'oak_wood', rx, y, rz);
+      spawnBlock(THREE, scene, collisionObstacles, 'oak_wood', rx, baseY + y, rz);
     }
 
     // 2. Feuilles vertes transparentes
-    const l1Y = trunkHeight - 2;
+    const l1Y = baseY + trunkHeight - 2;
     for (let dx = -2; dx <= 2; dx++) {
       for (let dz = -2; dz <= 2; dz++) {
         if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
@@ -534,7 +613,7 @@
       }
     }
 
-    const l2Y = trunkHeight - 1;
+    const l2Y = baseY + trunkHeight - 1;
     for (let dx = -2; dx <= 2; dx++) {
       for (let dz = -2; dz <= 2; dz++) {
         if (Math.abs(dx) === 2 && Math.abs(dz) === 2) continue;
@@ -543,31 +622,34 @@
       }
     }
 
-    const l3Y = trunkHeight;
+    const l3Y = baseY + trunkHeight;
     for (let dx = -1; dx <= 1; dx++) {
       for (let dz = -1; dz <= 1; dz++) {
         spawnBlock(THREE, scene, collisionObstacles, 'leaves', rx + dx, l3Y, rz + dz);
       }
     }
 
-    const l4Y = trunkHeight + 1;
+    const l4Y = baseY + trunkHeight + 1;
     [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dz]) => {
       spawnBlock(THREE, scene, collisionObstacles, 'leaves', rx + dx, l4Y, rz + dz);
     });
   }
 
   // Arbres du décor principal : chaque partie est un vrai bloc cassable.
-  function addVoxelTree(THREE, scene, collisionObstacles, x, z, trunkHeight = 4) {
+  function addVoxelTree(THREE, scene, collisionObstacles, x, z, trunkHeight = 4, baseY = null) {
     worldScene = scene;
     worldCollisionObstacles = collisionObstacles;
-    buildVoxelTree(THREE, scene, collisionObstacles, x, z, trunkHeight);
+    const groundY = Number.isFinite(baseY)
+      ? baseY
+      : mineableTerrain?.getSurfaceHeightAt(Math.round(x), Math.round(z)) ?? 0;
+    buildVoxelTree(THREE, scene, collisionObstacles, x, z, trunkHeight, groundY);
   }
 
-  function buildVillagerHouse(THREE, scene, collisionObstacles, centerX, centerZ) {
+  function buildVillagerHouse(THREE, scene, collisionObstacles, centerX, centerZ, baseY = 0) {
     if (!global.MinecraftBlocks) return;
     worldScene = scene;
     worldCollisionObstacles = collisionObstacles;
-    const house = { centerX, centerZ, blocks: [], flammableBlocks: [], rebuilding: false };
+    const house = { centerX, centerZ, baseY, blocks: [], flammableBlocks: [], rebuilding: false };
     const addHouseBlock = (blockId, x, y, z) => {
       const block = spawnBlock(THREE, scene, collisionObstacles, blockId, x, y, z);
       if (block) {
@@ -579,14 +661,15 @@
     };
 
     // Petite maison 5 x 5, avec une porte de deux blocs et des fenêtres.
-    for (let y = 0; y <= 2; y++) {
+    for (let level = 0; level <= 2; level++) {
       for (let offset = -2; offset <= 2; offset++) {
-        const frontIsDoor = offset === 0 && y < 2;
+        const y = baseY + level;
+        const frontIsDoor = offset === 0 && level < 2;
         if (!frontIsDoor) addHouseBlock('oak_planks', centerX + offset, y, centerZ + 2);
         addHouseBlock('oak_planks', centerX + offset, y, centerZ - 2);
 
         for (const side of [-2, 2]) {
-          const isWindow = Math.abs(offset) === 0 && y === 1;
+          const isWindow = offset === 0 && level === 1;
           if (isWindow) {
             addHouseBlock('glass', centerX + side, y, centerZ + offset);
           } else {
@@ -598,7 +681,7 @@
 
     for (let x = -2; x <= 2; x++) {
       for (let z = -2; z <= 2; z++) {
-        addHouseBlock('oak_planks', centerX + x, 3, centerZ + z);
+        addHouseBlock('oak_planks', centerX + x, baseY + 3, centerZ + z);
       }
     }
     villagerHouseRecord = house;
@@ -680,12 +763,14 @@
     ];
 
     distantTreeSpots.forEach(([tx, tz, th]) => {
-      buildVoxelTree(THREE, scene, collisionObstacles, tx, tz, th);
+      if (mineableTerrain?.isWaterAt(tx, tz)) return;
+      const baseY = mineableTerrain?.getSurfaceHeightAt(tx, tz) ?? 0;
+      buildVoxelTree(THREE, scene, collisionObstacles, tx, tz, th, baseY);
     });
 
     // Quelques collines de taille variable, réparties dans la plaine sans
     // recouvrir le spawn ni les arbres déjà générés.
-    const hillCount = 5 + Math.floor(Math.random() * 3);
+    const hillCount = mineableTerrain?.hasHeightMap ? 0 : 5 + Math.floor(Math.random() * 3);
     for (let hillIndex = 0; hillIndex < hillCount; hillIndex++) {
       const radiusX = 3 + Math.floor(Math.random() * 4);
       const radiusZ = 3 + Math.floor(Math.random() * 4);
@@ -1222,6 +1307,7 @@
     if (isTerrainBlock && terrainColumn) {
       mineableTerrain.ensureSupportLayer(terrainColumn, nextSupportY);
       mineableTerrain.maintainColumn(terrainColumn);
+      mineableTerrain.notifyColumnChanged(terrainColumn);
     }
   }
 
@@ -1405,6 +1491,12 @@
           worldCollisionObstacles,
           characterEntities
         );
+        if (target.isVillager) {
+          const safePosition = mineableTerrain?.clampToBounds(
+            target.root.position.x, target.root.position.z, 2
+          );
+          if (safePosition) target.root.position.setX(safePosition.x).setZ(safePosition.z);
+        }
         const damping = Math.exp(-7 * delta);
         reaction.velocityX *= damping;
         reaction.velocityZ *= damping;
@@ -1544,33 +1636,53 @@
 
   function findReplacementHouseSite(previousHouse) {
     const villager = characterEntities.find((entity) => entity && entity.isVillager);
-    const previousDistance = previousHouse
-      ? Math.hypot(previousHouse.centerX, previousHouse.centerZ)
-      : 16;
-    const minDistance = Math.max(30, previousDistance + 14);
-    const maxDistance = minDistance + 16;
+    const buildRadius = Math.max(6, mineableTerrain?.houseAreaRadius || 16);
+    const previousX = previousHouse?.centerX;
+    const previousZ = previousHouse?.centerZ;
 
-    for (let attempt = 0; attempt < 120; attempt++) {
-      const angle = Math.random() * Math.PI * 2;
-      // Les arbres décoratifs forment une couronne d’environ 28 à 47 blocs autour du spawn.
-      const distance = minDistance + Math.random() * (maxDistance - minDistance);
-      const x = Math.round(Math.cos(angle) * distance);
-      const z = Math.round(Math.sin(angle) * distance);
+    function isUsableSite(x, z, requireDistance) {
+      if (Math.hypot(x, z) > buildRadius) return null;
+      if (mineableTerrain?.isWaterAt(x, z)) return null;
+      if (requireDistance && Number.isFinite(previousX)
+        && Math.hypot(x - previousX, z - previousZ) < 8) return null;
+
+      const baseY = mineableTerrain?.getSurfaceHeightAt(x, z);
+      if (!Number.isFinite(baseY) || baseY < 0) return null;
+      for (let dx = -2; dx <= 2; dx++) {
+        for (let dz = -2; dz <= 2; dz++) {
+          if (mineableTerrain?.isWaterAt(x + dx, z + dz)) return null;
+          if (mineableTerrain?.getSurfaceHeightAt(x + dx, z + dz) !== baseY) return null;
+        }
+      }
+
       const overlapsBlocks = placedBlocks.some((block) => block.visible
         && !block.userData.terrainInstance && !block.userData.vegetationInstance
-        && block.position.y < 4.5
+        && block.userData.blockId !== 'grass'
+        && block.position.y < baseY + 4.5
         && Math.abs(block.position.x - x) < 4
         && Math.abs(block.position.z - z) < 4);
       const tooCloseToCharacter = characterEntities.some((entity) => entity && entity !== villager
-        && Math.hypot(entity.root.position.x - x, entity.root.position.z - z) < 10);
-      if (!overlapsBlocks && !tooCloseToCharacter) return { x, z };
+        && Math.hypot(entity.root.position.x - x, entity.root.position.z - z) < 9);
+      return !overlapsBlocks && !tooCloseToCharacter ? { x, z, baseY } : null;
     }
 
-    const angle = Math.random() * Math.PI * 2;
-    const distance = minDistance;
+    // Deux passes : préférer un emplacement différent, puis accepter tout
+    // emplacement plat sûr de la plaine si les reconstructions se répètent.
+    for (const requireDistance of [true, false]) {
+      for (let attempt = 0; attempt < 500; attempt++) {
+        const angle = Math.random() * Math.PI * 2;
+        const distance = Math.sqrt(Math.random()) * buildRadius;
+        const x = Math.round(Math.cos(angle) * distance);
+        const z = Math.round(Math.sin(angle) * distance);
+        const site = isUsableSite(x, z, requireDistance);
+        if (site) return site;
+      }
+    }
+
+    const fallback = { x: -12, z: 0 };
     return {
-      x: Math.round(Math.cos(angle) * distance),
-      z: Math.round(Math.sin(angle) * distance)
+      ...fallback,
+      baseY: mineableTerrain?.getSurfaceHeightAt(fallback.x, fallback.z) ?? 0
     };
   }
 
@@ -1599,15 +1711,15 @@
     house.blocks.forEach(removeHouseBlock);
 
     const site = findReplacementHouseSite(house);
-    buildVillagerHouse(global.THREE, worldScene, worldCollisionObstacles, site.x, site.z);
+    buildVillagerHouse(global.THREE, worldScene, worldCollisionObstacles, site.x, site.z, site.baseY);
     const villager = characterEntities.find((entity) => entity && entity.isVillager);
     if (villager) {
-      villager.root.position.y = 0;
       const side = villager.root.position.x <= site.x ? -1 : 1;
       const depthSide = villager.root.position.z <= site.z ? -1 : 1;
       villager.relocation = {
         x: site.x,
         z: site.z + 3.5,
+        baseY: site.baseY,
         waypoints: [
           { x: site.x + side * 4.5, z: site.z + depthSide * 4.5 },
           { x: site.x + side * 4.5, z: site.z + 4.5 },
@@ -1632,7 +1744,7 @@
     if (distance <= 0.35) {
       route.waypointIndex++;
       if (route.waypointIndex >= route.waypoints.length) {
-        villager.root.position.set(route.x, 0, route.z);
+        villager.root.position.set(route.x, route.baseY, route.z);
         villager.root.rotation.y = 0;
         villager.legs.forEach((leg) => { leg.rotation.x = 0; });
         villager.relocation = null;
@@ -1650,6 +1762,10 @@
       worldCollisionObstacles,
       characterEntities
     );
+    const safePosition = mineableTerrain?.clampToBounds(
+      villager.root.position.x, villager.root.position.z, 2
+    );
+    if (safePosition) villager.root.position.setX(safePosition.x).setZ(safePosition.z);
     const swing = Math.sin(route.elapsed * 12) * 0.45;
     villager.legs[0].rotation.x = swing;
     villager.legs[1].rotation.x = -swing;
@@ -1852,6 +1968,7 @@
     createMineableTerrain,
     registerMineableVegetation,
     getTerrainFloorHeight: (...args) => mineableTerrain ? mineableTerrain.getFloorHeight(...args) : null,
+    collidesWithTerrain: (...args) => mineableTerrain ? mineableTerrain.collidesWithTerrain(...args) : false,
     buildVillagerHouse,
     buildDecorativeStructures,
     addVoxelTree,

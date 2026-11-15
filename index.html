@@ -251,6 +251,7 @@
   <script src="characters/villager.js"></script>
   <script src="characters/chicken.js"></script>
   <script src="vegetation/grass.js"></script>
+  <script src="world/world-design.js"></script>
 </head>
 <body>
 
@@ -268,10 +269,6 @@
       <div style="color: #ffd700; margin-bottom: 3px;"><b>MISSION CHASSE AU TRÉSOR</b></div>
       <div>• L’œuf de l’Ender dragon a été volé : aidez Alex et Steve à le retrouver.</div>
       <div>• En récompense, le dragon partagera une partie de son trésor.</div>
-      <label class="world-option" for="infinite-world-toggle">
-        <input id="infinite-world-toggle" type="checkbox">
-        Monde infini
-      </label>
       <label class="world-option" for="split-camera-toggle">
         <input id="split-camera-toggle" type="checkbox">
         Caméras séparées : Alex / Steve
@@ -356,34 +353,15 @@
     /* ==========================================================
        1. SCÈNE 3D & ÉCLAIRAGE
        ========================================================== */
-    const worldUrlParams = new URLSearchParams(window.location.search);
-    let isInfiniteWorld = worldUrlParams.get('infinite') === 'true';
+    const isInfiniteWorld = false;
     let isSplitCameraMode = false;
     let terrain = null;
-    const infiniteWorldToggle = document.getElementById('infinite-world-toggle');
     const splitCameraToggle = document.getElementById('split-camera-toggle');
     const splitCameraDivider = document.getElementById('split-camera-divider');
     const splitTurnStepInput = document.getElementById('split-turn-step');
-    infiniteWorldToggle.checked = isInfiniteWorld;
-    infiniteWorldToggle.addEventListener('change', () => {
-      isInfiniteWorld = infiniteWorldToggle.checked;
-      const currentUrl = new URL(window.location.href);
-      currentUrl.searchParams.set('infinite', String(isInfiniteWorld));
-      window.history.replaceState(null, '', currentUrl);
-      if (!isInfiniteWorld) {
-        vegetation.restoreFinite();
-      }
-      terrain?.setBounds(isInfiniteWorld ? null : {
-        minX: -(worldSize / 2 - 1),
-        maxX: worldSize / 2 - 1,
-        minZ: -(worldSize / 2 - 1),
-        maxZ: worldSize / 2 - 1
-      });
-    });
 
     function getWorldUrl(fileName) {
       const url = new URL(fileName, window.location.href);
-      url.searchParams.set('infinite', String(isInfiniteWorld));
       return url.href;
     }
 
@@ -516,10 +494,10 @@
         followTarget: villager,
         followRadius: 22,
         bounds: {
-          minX: -75,
-          maxX: 75,
-          minZ: -75,
-          maxZ: 75
+          minX: -52,
+          maxX: 52,
+          minZ: -52,
+          maxZ: 52
         }
       });
       chicken.root.position.set(
@@ -535,24 +513,31 @@
     /* ==========================================================
        3. DÉCOR ÉPURÉ
        ========================================================== */
-    const worldSize = 500;
+    const island = window.MinecraftWorldDesign.createIsland();
+    const worldRadius = island.radius;
+    const pondWater = island.addWaterMeshes(THREE, scene);
     const collisionObstacles = [];
     terrain = window.MinecraftBlockWorld.createMineableTerrain(THREE, scene, collisionObstacles, {
       chunkSize: 24,
-      chunkRadius: 2,
-      bounds: isInfiniteWorld ? null : {
-        minX: -(worldSize / 2 - 1),
-        maxX: worldSize / 2 - 1,
-        minZ: -(worldSize / 2 - 1),
-        maxZ: worldSize / 2 - 1
-      }
+      staticWorld: true,
+      bounds: island.bounds,
+      surfaceHeightAt: island.getSurfaceHeightAt,
+      minimumLevelAt: island.getMinimumLevelAt,
+      isWaterAt: island.isWaterAt,
+      houseAreaRadius: island.plainRadius - 9,
+      onTerrainColumnChanged: (x, z, surfaceY) => pondWater.updateColumn(x, z, surfaceY),
+      initialLayerCapacity: 2
     });
+    villagerHouse.baseY = terrain.getSurfaceHeightAt(villagerHouse.x, villagerHouse.z) ?? 0;
+    villager.root.position.y = villagerHouse.baseY;
 
     function addBirch(x, z) {
-      window.MinecraftBlockWorld.addVoxelTree(THREE, scene, collisionObstacles, x, z, 4);
+      const baseY = terrain.getSurfaceHeightAt(x, z);
+      if (!Number.isFinite(baseY) || island.isWaterAt(x, z)) return;
+      window.MinecraftBlockWorld.addVoxelTree(THREE, scene, collisionObstacles, x, z, 4, baseY);
     }
 
-    const vegetation = window.MinecraftVegetation.createField(THREE, scene, 180);
+    const vegetation = window.MinecraftVegetation.createField(THREE, scene, 180, island);
     window.MinecraftBlockWorld.registerMineableVegetation(vegetation);
 
     function randomWorldPosition(centerX, centerZ, minRadius, maxRadius) {
@@ -565,7 +550,7 @@
     }
 
     for (let i = 0; i < 32; i++) {
-      const position = randomWorldPosition(0, 0, 26, 82);
+      const position = randomWorldPosition(0, 0, 26, 64);
       addBirch(position.x, position.z);
     }
 
@@ -574,7 +559,7 @@
        ========================================================== */
     if (window.MinecraftBlockWorld) {
       window.MinecraftBlockWorld.buildVillagerHouse(
-        THREE, scene, collisionObstacles, villagerHouse.x, villagerHouse.z
+        THREE, scene, collisionObstacles, villagerHouse.x, villagerHouse.z, villagerHouse.baseY
       );
       window.MinecraftBlockWorld.buildDecorativeStructures(THREE, scene, collisionObstacles);
       window.MinecraftBlockWorld.setupBlockInteraction(
@@ -946,7 +931,7 @@
     const clock = new THREE.Clock();
     const targetFrameInterval = 1000 / 30;
     let lastFrameTime = 0;
-    const worldLimit = worldSize / 2 - 1;
+    const worldLimit = worldRadius;
     const respawnPositions = new Map([
       [alex, new THREE.Vector3(-1.15, 0, 0)],
       [steve, new THREE.Vector3(1.15, 0, 0)]
@@ -966,9 +951,8 @@
 
     function updateWorldFall(character, delta) {
       const root = character.root;
-      if (!character.fallState && ((!isInfiniteWorld
-        && Math.max(Math.abs(root.position.x), Math.abs(root.position.z)) > worldLimit)
-        || root.position.y < -24)) {
+      if (!character.fallState
+        && (Math.hypot(root.position.x, root.position.z) > worldLimit || root.position.y < -24)) {
         beginWorldFall(character);
       }
 
