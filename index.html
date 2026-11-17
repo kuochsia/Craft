@@ -252,6 +252,11 @@
   <script src="characters/chicken.js"></script>
   <script src="vegetation/grass.js"></script>
   <script src="world/world-design.js"></script>
+  <script src="characters/sheep.js"></script>
+  <script src="characters/pig.js"></script>
+  <script src="characters/cow.js"></script>
+
+
 </head>
 <body>
 
@@ -487,6 +492,42 @@
     scene.add(steve.root);
     window.MinecraftWeaponsInventory.setCharacters(alex, steve);
 
+    const animals = { sheep: [], pigs: [], cows: [] };
+    const animalBounds = { minX: -35, maxX: 35, minZ: -35, maxZ: 35 };
+    const sheepColors = [0xffffff, 0xf3a7bf, 0x474747, 0x9d9d97, 0x8f5b3c];
+    const pigColors = [0xffffff, 0xffd5dc, 0xe7a7bf, 0xd58f79, 0xf1c6a6];
+    const cowColors = [0xffffff, 0xd6c0a0, 0x98856e, 0xc88973, 0xb6a66f];
+    const sheepPositions = [[6, -22], [10, -23], [14, -21], [8, -17], [13, -17]];
+    const pigPositions = [[-24, -5], [-19, -6], [-14, -4], [-23, 2], [-17, 5]];
+    const cowPositions = [[-6, 17], [0, 16], [6, 18], [-4, 24], [3, 25]];
+
+    for (let i = 0; i < 5; i++) {
+      const sheep = window.MinecraftCharacters.createSheep(THREE, {
+        woolColor: sheepColors[i], bounds: animalBounds,
+        home: { x: 16, z: 0 }, homeMinDistance: 8, homeMaxDistance: 28
+      });
+      sheep.root.position.set(sheepPositions[i][0], 0, sheepPositions[i][1]);
+      scene.add(sheep.root);
+      animals.sheep.push(sheep);
+
+      const pig = window.MinecraftCharacters.createPig(THREE, {
+        skinColor: pigColors[i], bounds: animalBounds,
+        home: { x: 0, z: 0 }, homeMinDistance: 0, homeMaxDistance: 36
+      });
+      pig.root.position.set(pigPositions[i][0], 0, pigPositions[i][1]);
+      scene.add(pig.root);
+      animals.pigs.push(pig);
+
+      const cow = window.MinecraftCharacters.createCow(THREE, {
+        coatColor: cowColors[i], bounds: animalBounds,
+        home: { x: 0, z: 0 }, homeMinDistance: 0, homeMaxDistance: 36
+      });
+      cow.root.position.set(cowPositions[i][0], 0, cowPositions[i][1]);
+      scene.add(cow.root);
+      animals.cows.push(cow);
+    }
+
+
     const chickens = [];
 
     for (let i = 0; i < 4; i++) {
@@ -508,6 +549,7 @@
       scene.add(chicken.root);
       chickens.push(chicken);
     }
+    const collisionEntities = [alex, steve, villager, ...animals.sheep, ...animals.pigs, ...animals.cows, ...chickens];
 
 
     /* ==========================================================
@@ -527,6 +569,14 @@
       houseAreaRadius: island.plainRadius - 9,
       onTerrainColumnChanged: (x, z, surfaceY) => pondWater.updateColumn(x, z, surfaceY),
       initialLayerCapacity: 2
+    });
+    const getAnimalFloor = (x, z, radius, currentY) =>
+      window.MinecraftBlockWorld.getTerrainFloorHeight(x, z, radius, currentY);
+    const collidesAnimalWithTerrain = (x, z, radius, height, feetY) =>
+      window.MinecraftBlockWorld.collidesWithTerrain(x, z, radius, height, feetY);
+    [...animals.sheep, ...animals.pigs, ...animals.cows].forEach((animal) => {
+      animal.setWorldQueries(getAnimalFloor, collidesAnimalWithTerrain);
+      animal.root.position.y = terrain.getSurfaceHeightAt(animal.root.position.x, animal.root.position.z) ?? 0;
     });
     villagerHouse.baseY = terrain.getSurfaceHeightAt(villagerHouse.x, villagerHouse.z) ?? 0;
     villager.root.position.y = villagerHouse.baseY;
@@ -790,6 +840,7 @@
       renderer,
       canvas,
       characters: { alex, steve, villager, chickens },
+      collisionEntities,
       collisionObstacles,
       splitToggle: splitCameraToggle,
       divider: splitCameraDivider,
@@ -970,7 +1021,13 @@
       root.rotation.z += fall.tiltDirection * step * 0.45;
 
       if (fall.elapsed >= 2) {
-        root.position.copy(respawnPositions.get(character));
+        const startPosition = respawnPositions.get(character);
+        const safePosition = window.MinecraftBlockWorld.findNearestGroundPosition(
+          startPosition.x,
+          startPosition.z,
+          { character, preferredY: startPosition.y, maxDistance: 80 }
+        );
+        root.position.copy(safePosition || startPosition);
         root.rotation.x = 0;
         root.rotation.z = 0;
         root.userData.jumpVelocity = 0;
@@ -1097,18 +1154,18 @@
         const correction = (separation - maxCharacterSeparation) / separation;
         if (alexMoving && steveMoving) {
           window.MinecraftCharacterModel.moveWithCollisions(
-            alex, -separationX * correction / 2, -separationZ * correction / 2, collisionObstacles
+            alex, -separationX * correction / 2, -separationZ * correction / 2, collisionObstacles, collisionEntities
           );
           window.MinecraftCharacterModel.moveWithCollisions(
-            steve, separationX * correction / 2, separationZ * correction / 2, collisionObstacles
+            steve, separationX * correction / 2, separationZ * correction / 2, collisionObstacles, collisionEntities
           );
         } else if (alexMoving) {
           window.MinecraftCharacterModel.moveWithCollisions(
-            alex, -separationX * correction, -separationZ * correction, collisionObstacles
+            alex, -separationX * correction, -separationZ * correction, collisionObstacles, collisionEntities
           );
         } else if (steveMoving) {
           window.MinecraftCharacterModel.moveWithCollisions(
-            steve, separationX * correction, separationZ * correction, collisionObstacles
+            steve, separationX * correction, separationZ * correction, collisionObstacles, collisionEntities
           );
         }
       }
@@ -1216,9 +1273,11 @@
         setTimeout(() => pageLoader.remove(), 350);
       }
       // Liste des entités utilisées pour les collisions des poulets.
-      const allEntities = [alex, steve, villager, ...chickens]; // adaptez selon les noms de vos variables
       chickens.forEach((chicken) => {
-        chicken.update(delta, collisionObstacles, allEntities);
+        chicken.update(delta, collisionObstacles, collisionEntities);
+      });
+      [...animals.sheep, ...animals.pigs, ...animals.cows].forEach((animal) => {
+        animal.update(delta, collisionObstacles, collisionEntities);
       });
       window.MinecraftBlockWorld.updateCharacterHitReactions(delta);
 

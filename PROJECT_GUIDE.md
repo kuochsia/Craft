@@ -17,9 +17,9 @@ Pour lancer localement, servir la racine du dépôt avec un serveur HTTP statiqu
 | Chemin | Responsabilité |
 | --- | --- |
 | [`index.html`](index.html) | Scène principale, interface et menus, création des personnages et du décor, monde fini, caméra, boucle d’animation et commandes propres à cette page. Une grande partie de l’orchestration est en JavaScript inline. |
-| [`end.html`](end.html) | Scène de l’End, îles/blocs, rencontre avec le dragon, caméra, chute de 2 secondes et réapparition des joueurs. Sa boucle de jeu est indépendante de celle d’`index.html`. |
+| [`end.html`](end.html) | Scène de l’End, îles/blocs instanciés minables, rencontre avec le dragon, caméra, chute dans le vide et réapparition des joueurs. Sa boucle de jeu est indépendante de celle d’`index.html`. |
 | [`blocks/blocks.js`](blocks/blocks.js) | Registre `MinecraftBlocks`, création de matériaux, textures, meshes et icônes, blocs personnalisés et persistance des blocs de l’éditeur. |
-| [`blocks/block-world.js`](blocks/block-world.js) | Monde de blocs : placement, minage, ciblage, durabilité, collisions du terrain, chunks, végétation minable, arbres, collines, maison du villageois, feu, TNT et interactions de personnages. |
+| [`blocks/block-world.js`](blocks/block-world.js) | Monde de blocs : placement, minage, ciblage, durabilité, collisions du terrain, chunks, champs de voxels instanciés minables, végétation, arbres, collines, maison du villageois, feu, TNT et interactions de personnages. |
 | `blocks/<id>.js` | Définition et enregistrement d’un bloc. Les définitions chargées par une page doivent précéder `blocks/block-world.js` dans le HTML. |
 | [`blocks/dirt.js`](blocks/dirt.js) | Définition procédurale du bloc de terre, requise par le terrain minable d’`index.html`. |
 | [`blocks/block-editor.html`](blocks/block-editor.html) | Éditeur visuel de blocs. Utilise le registre et la sauvegarde de `blocks/blocks.js`. |
@@ -27,6 +27,10 @@ Pour lancer localement, servir la racine du dépôt avec un serveur HTTP statiqu
 | `characters/alex.js`, `characters/steve.js` | Apparences/configurations d’Alex et Steve ; exposent leurs constructeurs sous `MinecraftCharacters`. |
 | [`characters/villager.js`](characters/villager.js) | Modèle et comportement du villageois. |
 | [`characters/chicken.js`](characters/chicken.js) | Modèle, déplacement aléatoire, suivi et collisions propres aux poulets. |
+| [`characters/sheep.js`](characters/sheep.js) | Modèle, teinte de laine, promenade, broutage, collisions et gravité dans les trous. |
+| [`characters/pig.js`](characters/pig.js) | Modèle, teinte de peau, promenade, fouille, collisions et gravité dans les trous. |
+| [`characters/cow.js`](characters/cow.js) | Modèle, teinte du pelage, promenade, broutage, collisions et gravité dans les trous. |
+| [`characters/enderman.js`](characters/enderman.js) | Modèle, IA, téléportation, collisions avec les personnages/le terrain minable, gravité dans les trous et état agressif de l’Enderman dans `end.html`. |
 | [`characters/ender-dragon.js`](characters/ender-dragon.js) | Modèle de l’Ender dragon utilisé dans l’End. |
 | [`shared/character-camera-controls.js`](shared/character-camera-controls.js) | Contrôles de caméra et conversion des touches en déplacement. Expose `MinecraftCharacterCameraControls`. |
 | [`weapons/inventory.js`](weapons/inventory.js) | Inventaires, sélection arme/bloc, modèle en main et routage des actions vers `MinecraftBlockWorld`. |
@@ -42,24 +46,24 @@ Les balises `<script>` sont des scripts classiques : leur ordre est une dépenda
 Dans `index.html`, l’ordre important est :
 
 1. Three.js (`r128`) et les utilitaires d’armes.
-2. `characters/character-model.js`, puis Alex, Steve, villageois et poulets.
+2. `characters/character-model.js`, puis Alex, Steve, villageois, poulets, moutons, cochons et vaches.
 3. `vegetation/grass.js` et `world/world-design.js` avant l’initialisation inline de la scène.
 4. `blocks/blocks.js`, puis les définitions de blocs, dont `grass.js` et `dirt.js`.
 5. `blocks/block-world.js` après toutes les définitions de blocs.
 6. `weapons/inventory.js` après le monde de blocs, puis `shared/character-camera-controls.js`.
 7. Le script inline qui construit la scène et démarre la boucle.
 
-`end.html` partage les scripts des personnages, armes et blocs, mais construit sa propre scène et sa propre boucle. Il ne crée pas le terrain infini minable de la page principale. Si une nouvelle page appelle `createMineableTerrain`, elle doit charger les définitions `grass` et `dirt` avant `blocks/block-world.js`.
+`end.html` partage les scripts des personnages, armes et blocs, mais construit sa propre scène et sa propre boucle. `characters/enderman.js` est chargé après le modèle commun et avant le script inline de la scène. Il ne crée pas le terrain infini minable de la page principale. Si une nouvelle page appelle `createMineableTerrain`, elle doit charger les définitions `grass` et `dirt` avant `blocks/block-world.js`.
 
 ## API globales principales
 
 | API | Définie par | Usage |
 | --- | --- | --- |
 | `window.MinecraftBlocks` | `blocks/blocks.js` | `get(id)`, `getAll()`, `register(def)`, `createBlockMesh(THREE, def, options)` et sauvegarde des blocs personnalisés. |
-| `window.MinecraftBlockWorld` | `blocks/block-world.js` | `spawnBlock`, `createMineableTerrain`, `registerMineableVegetation`, `getTerrainFloorHeight`, `collidesWithTerrain`, `buildVillagerHouse`, `buildDecorativeStructures`, `setupBlockInteraction`, `triggerAction`, `update` et accès à `placedBlocks`. `createMineableTerrain` expose aussi la zone de construction plate et le clamp des positions aux limites. |
+| `window.MinecraftBlockWorld` | `blocks/block-world.js` | `spawnBlock`, `createMineableTerrain`, `registerMineableInstancedIsland`, `registerMineableVegetation`, `getTerrainFloorHeight`, `collidesWithTerrain`, `findNearestGroundPosition`, `buildVillagerHouse`, `buildDecorativeStructures`, `setupBlockInteraction`, `triggerAction`, `update` et accès à `placedBlocks`. Les champs instanciés utilisent les mêmes interactions et requêtes de collision que le terrain. |
 | `window.MinecraftCharacterModel` | `characters/character-model.js` | `build`, `startJump`, `stopJump`, `updateJump`, `moveWithCollisions`, armes et animations. |
-| `window.MinecraftCharacters` | fichiers `characters/*.js` | Constructeurs Alex, Steve, villageois et poulet. |
-| `window.MinecraftCharacterCameraControls` | `shared/character-camera-controls.js` | Contrôles configurables par personnage, déplacement et caméras séparées. |
+| `window.MinecraftCharacters` | fichiers `characters/*.js` | Constructeurs Alex, Steve, villageois, poulet, mouton, cochon et vache. |
+| `window.MinecraftCharacterCameraControls` | `shared/character-camera-controls.js` | Contrôles configurables par personnage, déplacement et caméras séparées. L’option `collisionEntities` permet de fournir les entités supplémentaires à tester lors du déplacement ; sans elle, les contrôles utilisent les personnages de `characters`. |
 | `window.MinecraftWeapons` | fichiers `weapons/*.js` | Définitions et constructeurs des armes. |
 | `window.MinecraftWeaponsInventory` | `weapons/inventory.js` | Branchement des personnages et sélection d’inventaire. |
 | `window.MinecraftVegetation` | `vegetation/grass.js` | Preset, texture, matériau et création du champ d’herbe instancié. |
@@ -112,12 +116,14 @@ Le briquet filtre ses cibles vers TNT et blocs inflammables ; ne pas le faire ch
 ## Personnages, déplacement et caméra
 
 - `character-model.js` gère la physique commune des joueurs : position des pieds, saut, gravité, interactions avec les obstacles et collisions terrain.
-- `shared/character-camera-controls.js` transmet le déplacement à `moveWithCollisions`. Les bindings de touches de la page principale sont dans `index.html`.
+- `shared/character-camera-controls.js` transmet le déplacement à `moveWithCollisions`. Dans `index.html`, `collisionEntities` inclut Alex, Steve, le villageois, les poulets, les moutons, les cochons et les vaches ; les joueurs et les corrections de séparation respectent ces hitboxes.
+- Dans `end.html`, `allEntities` regroupe Alex, Steve et l’Enderman. Cette liste est fournie aux contrôles caméra, aux déplacements scriptés/corrections de séparation et à `enderman.update`, pour que joueurs et Enderman se bloquent mutuellement. `moveWithCollisions` ignore automatiquement l’entité qui se déplace. Une action A/I avec une arme rend l’Enderman agressif si le joueur est à portée et lui fait face.
 - La page principale utilise les touches Z/Q/S/D ou flèches pour Alex, O/K/L/M pour Steve ; V/N pour sauter, R/U pour sélectionner, A/I pour l’action. L’inventaire est décrit dans `weapons/inventory.js`.
-- Les poulets ont leur propre IA et physique dans `characters/chicken.js`. Si une modification de collision doit concerner les poulets, elle ne sera pas automatiquement appliquée par le déplacement commun des joueurs.
+- Les poulets, moutons, cochons et vaches ont leurs propres IA et physique (`characters/chicken.js`, `characters/sheep.js`, `characters/pig.js`, `characters/cow.js`). Les trois grands animaux reçoivent les requêtes de sol et de collision du terrain minable, évitent les obstacles et les autres entités, et tombent dans les trous quand aucun sol n’est trouvé. `index.html` crée cinq moutons, cinq cochons et cinq vaches ; leurs couleurs sont configurées au moment de la création.
 - Le villageois utilise son propre modèle ; `block-world.js` applique sa gravité et le fait sauter automatiquement pour sortir d’un trou quand le rebord est à portée de saut. Son suivi/relocation est aussi coordonné par `block-world.js`.
 - La maison du villageois est suivie bloc par bloc et suit la hauteur locale du terrain. Après incendie ou TNT, si ses blocs inflammables ont tous disparu, `replaceBurnedVillagerHouse` cherche un plateau plat dans la plaine, puis y place la maison et guide le villageois vers la porte. Les positions du villageois sont bornées au disque de l’île, y compris pendant le recul après un coup.
-- `end.html` a sa propre animation de chute de 2 secondes et son propre respawn. Les changements de déplacement ou de cycle de vie des joueurs doivent être vérifiés sur les deux pages si leur comportement partagé est visé.
+- `end.html` a sa propre animation de chute de 2 secondes et son propre respawn. Les deux mondes utilisent `findNearestGroundPosition` pour rechercher un sol stable près du point de départ, en privilégiant l’altitude initiale, avant de réapparaître.
+- `end.html` enregistre ses îles voxels dans `MinecraftBlockWorld.registerMineableInstancedIsland`. Les proxies permettent de miner les instances sans créer un mesh par bloc ; la même API les inclut aux collisions latérales et au calcul du sol. Le mode fini déclenche la chute si le joueur quitte l’île principale ou perd le sol sous ses pieds.
 - Dans `index.html`, franchir le bord circulaire de l’île lance une chute de 2 secondes ; Alex et Steve réapparaissent à leurs positions initiales, au centre de la plaine. Les poulets restent contenus dans leur zone de déplacement.
 
 ## Rendu et performance

@@ -182,6 +182,8 @@
   <script src="characters/alex.js"></script>
   <script src="characters/steve.js"></script>
   <script src="characters/ender-dragon.js"></script>
+  <script src="characters/enderman.js"></script>
+
 </head>
 <body>
   <div class="menu">
@@ -238,6 +240,7 @@
   <script src="blocks/block-world.js"></script>
   <script src="weapons/inventory.js"></script>
   <script src="shared/character-camera-controls.js"></script>
+
   <script>
     const worldUrlParams = new URLSearchParams(window.location.search);
     let isInfiniteWorld = worldUrlParams.get('infinite') === 'true';
@@ -351,22 +354,10 @@
         }
       }
 
-      const transform = new THREE.Object3D();
-      blocksByColor.forEach((positions, colorIndex) => {
-        if (!positions.length) return;
-        const mesh = new THREE.InstancedMesh(islandGeometry, islandPalette[colorIndex], positions.length);
-        positions.forEach((position, index) => {
-          transform.position.set(position.x, position.y, position.z);
-          transform.updateMatrix();
-          mesh.setMatrixAt(index, transform.matrix);
-        });
-        mesh.instanceMatrix.needsUpdate = true;
-        mesh.castShadow = false;
-        mesh.receiveShadow = true;
-        island.add(mesh);
-      });
-
       island.position.set(x, y, z);
+      window.MinecraftBlockWorld.registerMineableInstancedIsland(
+        THREE, island, islandGeometry, islandPalette, blocksByColor
+      );
       scene.add(island);
       return island;
     }
@@ -395,7 +386,13 @@
       pillar.userData.finitePosition = pillar.position.clone();
       scene.add(pillar);
       pillars.push(pillar);
-      collisionObstacles.push({ position: pillar.position, halfWidth: 2.6, halfDepth: 2.6 });
+      collisionObstacles.push({
+        position: pillar.position,
+        halfWidth: 2.6,
+        halfDepth: 2.6,
+        yBottom: 0,
+        yTop: height + 0.6
+      });
     }
 
     const islands = [];
@@ -424,6 +421,35 @@
     window.MinecraftWeaponsInventory.setCharacters(alex, steve);
     const enderDragon = window.EnderDragon.create(THREE);
     scene.add(enderDragon);
+    const enderman = window.MinecraftCharacters.createEnderman(THREE, {
+      bounds: { minX: -15, maxX: 15, minZ: -15, maxZ: 15 }
+    });
+    enderman.root.position.set(-4, 0, -4);
+    scene.add(enderman.root);
+    const allEntities = [alex, steve, enderman];
+
+    function tryHitEnderman(character) {
+      if (!character.weaponConfig || character.isHoldingBlock) return;
+
+      const dx = enderman.root.position.x - character.root.position.x;
+      const dz = enderman.root.position.z - character.root.position.z;
+      const distance = Math.hypot(dx, dz);
+      const reach = (character.collisionRadius || 0.38) + enderman.collisionRadius + 0.9;
+      if (distance > reach || distance === 0) return;
+
+      const facingX = Math.sin(character.root.rotation.y);
+      const facingZ = Math.cos(character.root.rotation.y);
+      const facingDot = (facingX * dx + facingZ * dz) / distance;
+      if (facingDot >= Math.cos(Math.PI / 3)) enderman.setAngry(true);
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.repeat) return;
+      const key = event.key.toLowerCase();
+      const character = key === 'a' ? alex : key === 'i' ? steve : null;
+      if (character) tryHitEnderman(character);
+    });
+
     window.MinecraftBlockWorld.setupBlockInteraction(
       THREE, scene, camera, canvas, collisionObstacles, alex, steve
     );
@@ -472,7 +498,7 @@
       window.speechSynthesis.speak(utterance);
     }
 
-    function moveCharacterToMeetingPoint(character, destination, otherCharacter, delta, time) {
+    function moveCharacterToMeetingPoint(character, destination, otherEntities, delta, time) {
       if (character.fallState) {
         character.isMoving = false;
         return false;
@@ -491,7 +517,7 @@
           (dx / distance) * frameStep,
           (dz / distance) * frameStep,
           collisionObstacles,
-          otherCharacter
+          otherEntities
         );
         const walk = Math.sin(time * 12) * 0.62;
         character.leftLegPivot.rotation.x = walk;
@@ -512,8 +538,8 @@
     }
 
     function updateMeetingCharacters(delta, time) {
-      const alexArrived = moveCharacterToMeetingPoint(alex, meetingTargets.alex, steve, delta, time);
-      const steveArrived = moveCharacterToMeetingPoint(steve, meetingTargets.steve, alex, delta, time);
+      const alexArrived = moveCharacterToMeetingPoint(alex, meetingTargets.alex, allEntities, delta, time);
+      const steveArrived = moveCharacterToMeetingPoint(steve, meetingTargets.steve, allEntities, delta, time);
       return alexArrived && steveArrived;
     }
 
@@ -543,6 +569,7 @@
       renderer,
       canvas,
       characters: { alex, steve },
+      collisionEntities: allEntities,
       collisionObstacles,
       splitToggle: document.getElementById('split-camera-toggle'),
       divider: document.getElementById('split-camera-divider'),
@@ -629,7 +656,13 @@
       character.root.rotation.z += fall.tiltDirection * step * 0.45;
 
       if (fall.elapsed >= 2) {
-        character.root.position.copy(respawnPositions.get(character));
+        const startPosition = respawnPositions.get(character);
+        const safePosition = window.MinecraftBlockWorld.findNearestGroundPosition(
+          startPosition.x,
+          startPosition.z,
+          { character, preferredY: startPosition.y, maxDistance: 80 }
+        );
+        character.root.position.copy(safePosition || startPosition);
         character.root.rotation.x = 0;
         character.root.rotation.z = 0;
         character.root.userData.jumpVelocity = 0;
@@ -649,6 +682,7 @@
       const time = clock.getElapsedTime();
       const speed = 4.2 * delta;
       window.MinecraftBlockWorld.update(delta, time);
+      enderman.update(delta, collisionObstacles, allEntities);
       updateIslandFall(alex, delta);
       updateIslandFall(steve, delta);
 
@@ -696,22 +730,29 @@
       if (!isSplitCameraMode && !alex.fallState && !steve.fallState && separation > 16) {
         const correction = (separation - 16) / separation;
         window.MinecraftCharacterModel.moveWithCollisions(
-          alex, -dx * correction / 2, -dz * correction / 2, collisionObstacles
+          alex, -dx * correction / 2, -dz * correction / 2, collisionObstacles, allEntities
         );
         window.MinecraftCharacterModel.moveWithCollisions(
-          steve, dx * correction / 2, dz * correction / 2, collisionObstacles
+          steve, dx * correction / 2, dz * correction / 2, collisionObstacles, allEntities
         );
       }
 
-      if (!isInfiniteWorld) {
-        [alex, steve].forEach((character) => {
-          const islandDistance = Math.hypot(
-            character.root.position.x / finiteIslandRadiusX,
-            character.root.position.z / finiteIslandRadiusZ
-          );
-          if (islandDistance > 1.02) beginIslandFall(character);
-        });
-      }
+      [alex, steve].forEach((character) => {
+        const islandDistance = Math.hypot(
+          character.root.position.x / finiteIslandRadiusX,
+          character.root.position.z / finiteIslandRadiusZ
+        );
+        const floor = window.MinecraftBlockWorld.getTerrainFloorHeight(
+          character.root.position.x,
+          character.root.position.z,
+          character.collisionRadius || 0.32,
+          character.root.position.y
+        );
+        if ((!isInfiniteWorld && islandDistance > 1.02)
+          || (!Number.isFinite(floor) && character.root.position.y < 0.35)) {
+          beginIslandFall(character);
+        }
+      });
 
       if (resumeDragonAfterMovement && postDialogueCharacterPositions) {
         const alexMoved = alex.root.position.distanceTo(postDialogueCharacterPositions.alex) > 0.12;

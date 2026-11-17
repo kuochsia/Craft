@@ -8,6 +8,7 @@
   'use strict';
 
   const placedBlocks = [];
+  const mineableVoxelFields = [];
   const activeParticles = [];
   const shakingBlocks = [];
   const burningBlocks = [];
@@ -43,6 +44,219 @@
     diamond_ore: { baseHp: 7, bestTools: ['pickaxe'], bonusDamage: 3 },
     obsidian: { baseHp: 12, bestTools: ['pickaxe'], bonusDamage: 3 }
   };
+
+  function getBlockWorldPosition(block, target = new global.THREE.Vector3()) {
+    target.copy(block.position);
+    const field = block.userData?.instancedVoxelField;
+    if (field) target.add(field.root.position);
+    return target;
+  }
+
+  function registerMineableInstancedIsland(THREE, root, geometry, materials, blocksByColor) {
+    const field = { root, columns: new Map() };
+    const getColumn = (x, z) => {
+      const key = `${x},${z}`;
+      let column = field.columns.get(key);
+      if (!column) {
+        column = { x, z, blocks: [], surfaceY: -Infinity };
+        field.columns.set(key, column);
+      }
+      return column;
+    };
+    const transform = new THREE.Object3D();
+    field.removeBlock = (block) => {
+      const instance = block.userData.instancedVoxel;
+      if (!instance || !block.visible) return;
+      transform.position.set(0, 0, 0);
+      transform.rotation.set(0, 0, 0);
+      transform.scale.set(0, 0, 0);
+      transform.updateMatrix();
+      instance.mesh.setMatrixAt(instance.index, transform.matrix);
+      instance.mesh.instanceMatrix.needsUpdate = true;
+      instance.mesh.boundingSphere = null;
+      block.visible = false;
+      const blockIndex = instance.column.blocks.indexOf(block);
+      if (blockIndex !== -1) instance.column.blocks.splice(blockIndex, 1);
+      instance.column.surfaceY = instance.column.blocks.reduce(
+        (highest, current) => Math.max(highest, current.position.y + 0.5),
+        -Infinity
+      );
+    };
+    const grassDef = global.MinecraftBlocks?.get('grass') || null;
+    const stoneDef = global.MinecraftBlocks?.get('stone') || grassDef;
+
+    blocksByColor.forEach((positions, colorIndex) => {
+      if (!positions.length) return;
+      const mesh = new THREE.InstancedMesh(geometry, materials[colorIndex], positions.length);
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      root.add(mesh);
+
+      positions.forEach((position, index) => {
+        transform.position.set(position.x, position.y, position.z);
+        transform.updateMatrix();
+        mesh.setMatrixAt(index, transform.matrix);
+
+        const isGreenBlock = colorIndex <= 2;
+        const blockDef = isGreenBlock ? grassDef : stoneDef;
+        const blockId = isGreenBlock ? 'grass' : 'stone';
+        const durability = BLOCK_DURABILITY[blockId];
+        const column = getColumn(position.x, position.z);
+        const block = {
+          position: new THREE.Vector3(position.x, position.y, position.z),
+          visible: true,
+          userData: {
+            isMinecraftBlock: true,
+            blockId,
+            blockDef,
+            breakColors: materials[colorIndex].color
+              ? [materials[colorIndex].color.getHex()]
+              : null,
+            maxHp: durability.baseHp,
+            currentHp: durability.baseHp,
+            instancedVoxelField: field,
+            instancedVoxel: { mesh, index, column }
+          }
+        };
+        column.blocks.push(block);
+        column.surfaceY = Math.max(column.surfaceY, position.y + 0.5);
+        placedBlocks.push(block);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    });
+
+    field.getFloorHeight = (x, z, radius = 0.32, currentY) => {
+      const localX = x - root.position.x;
+      const localZ = z - root.position.z;
+      const minX = Math.ceil(localX - radius - 0.5);
+      const maxX = Math.floor(localX + radius + 0.5);
+      const minZ = Math.ceil(localZ - radius - 0.5);
+      const maxZ = Math.floor(localZ + radius + 0.5);
+      let floor = -Infinity;
+      for (let blockX = minX; blockX <= maxX; blockX++) {
+        for (let blockZ = minZ; blockZ <= maxZ; blockZ++) {
+          const column = field.columns.get(`${blockX},${blockZ}`);
+          const top = column ? column.surfaceY + root.position.y : -Infinity;
+          if (!Number.isFinite(top) || (currentY !== undefined && currentY < top - 0.08)) continue;
+          floor = Math.max(floor, top);
+        }
+      }
+      return Number.isFinite(floor) ? floor : null;
+    };
+
+    field.collides = (x, z, radius, height, feetY) => {
+      const localX = x - root.position.x;
+      const localZ = z - root.position.z;
+      const minX = Math.ceil(localX - radius - 0.5);
+      const maxX = Math.floor(localX + radius + 0.5);
+      const minZ = Math.ceil(localZ - radius - 0.5);
+      const maxZ = Math.floor(localZ + radius + 0.5);
+      for (let blockX = minX; blockX <= maxX; blockX++) {
+        for (let blockZ = minZ; blockZ <= maxZ; blockZ++) {
+          const column = field.columns.get(`${blockX},${blockZ}`);
+          if (!column) continue;
+          for (const block of column.blocks) {
+            const top = block.position.y + root.position.y + 0.5;
+            const bottom = block.position.y + root.position.y - 0.5;
+            if (feetY >= top - 0.005 || feetY + height <= bottom + 0.005) continue;
+            const worldX = block.position.x + root.position.x;
+            const worldZ = block.position.z + root.position.z;
+            if (x + radius > worldX - 0.5 && x - radius < worldX + 0.5
+              && z + radius > worldZ - 0.5 && z - radius < worldZ + 0.5) return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    mineableVoxelFields.push(field);
+    return field;
+  }
+
+  function getWorldFloorHeight(x, z, radius, currentY) {
+    let floor = mineableTerrain ? mineableTerrain.getFloorHeight(x, z, radius, currentY) : null;
+    for (const field of mineableVoxelFields) {
+      const fieldFloor = field.getFloorHeight(x, z, radius, currentY);
+      if (Number.isFinite(fieldFloor) && (!Number.isFinite(floor) || fieldFloor > floor)) floor = fieldFloor;
+    }
+    return Number.isFinite(floor) ? floor : null;
+  }
+
+  function collidesWithTerrainFields(x, z, radius, height, feetY) {
+    if (mineableTerrain?.collidesWithTerrain(x, z, radius, height, feetY)) return true;
+    return mineableVoxelFields.some((field) => field.collides(x, z, radius, height, feetY));
+  }
+
+  function collidesWithWorld(x, z, radius, height, feetY) {
+    if (collidesWithTerrainFields(x, z, radius, height, feetY)) return true;
+    return Boolean(worldCollisionObstacles?.some((obstacle) => {
+      if (obstacle.mesh && !obstacle.mesh.visible) return false;
+      const top = obstacle.yTop ?? obstacle.position.y + 0.5;
+      const bottom = obstacle.yBottom ?? obstacle.position.y - 0.5;
+      if (feetY >= top - 0.005 || feetY + height <= bottom + 0.005) return false;
+      return x + radius > obstacle.position.x - obstacle.halfWidth
+        && x - radius < obstacle.position.x + obstacle.halfWidth
+        && z + radius > obstacle.position.z - obstacle.halfDepth
+        && z - radius < obstacle.position.z + obstacle.halfDepth;
+    }));
+  }
+
+  function findNearestGroundPosition(x, z, options = {}) {
+    const step = 0.5;
+    const maxDistance = Math.max(step, options.maxDistance || 80);
+    const character = options.character || null;
+    const radius = character?.collisionRadius || 0.38;
+    const height = character?.collisionHeight || global.MinecraftCharacterModel?.HEIGHT || 1.8;
+    const supportOffsets = [
+      [0, 0], [radius * 0.72, 0], [-radius * 0.72, 0],
+      [0, radius * 0.72], [0, -radius * 0.72]
+    ];
+    const maxRing = Math.ceil(maxDistance / step);
+    const minimumPreferredFloor = Number.isFinite(options.preferredY)
+      ? options.preferredY - 0.25
+      : null;
+    const floorPasses = minimumPreferredFloor === null
+      ? [null]
+      : [minimumPreferredFloor, null];
+
+    for (const minimumFloor of floorPasses) {
+      for (let ring = 0; ring <= maxRing; ring++) {
+        const candidates = [];
+        for (let dx = -ring; dx <= ring; dx++) {
+          for (let dz = -ring; dz <= ring; dz++) {
+            if (Math.max(Math.abs(dx), Math.abs(dz)) !== ring) continue;
+            const candidateX = x + dx * step;
+            const candidateZ = z + dz * step;
+            const distance = Math.hypot(candidateX - x, candidateZ - z);
+            if (distance <= maxDistance) candidates.push({ x: candidateX, z: candidateZ, distance });
+          }
+        }
+        candidates.sort((a, b) => a.distance - b.distance);
+
+        for (const candidate of candidates) {
+          const floor = getWorldFloorHeight(candidate.x, candidate.z, 0.08);
+          if (!Number.isFinite(floor) || (minimumFloor !== null && floor < minimumFloor)) continue;
+          const fullySupported = supportOffsets.every(([offsetX, offsetZ]) => {
+            const sample = getWorldFloorHeight(candidate.x + offsetX, candidate.z + offsetZ, 0.04);
+            return Number.isFinite(sample) && Math.abs(sample - floor) < 0.08;
+          });
+          if (!fullySupported || collidesWithWorld(candidate.x, candidate.z, radius, height, floor)) continue;
+
+          const overlapsCharacter = characterEntities.some((other) => {
+            if (!other || other === character || !other.root) return false;
+            const otherRadius = other.collisionRadius || 0.38;
+            const verticalOverlap = floor < other.root.position.y + (other.collisionHeight || height)
+              && floor + height > other.root.position.y;
+            return verticalOverlap
+              && Math.hypot(candidate.x - other.root.position.x, candidate.z - other.root.position.z)
+                < radius + otherRadius + 0.05;
+          });
+          if (!overlapsCharacter) return new global.THREE.Vector3(candidate.x, floor, candidate.z);
+        }
+      }
+    }
+    return null;
+  }
 
   /**
    * Synthèse audio Web Audio API pour bruitages de coups et d'explosion de blocs
@@ -816,19 +1030,21 @@
     const MAX_REACH = 2.6;
     const MIN_DOT = 0.45;
     const characterHeight = global.MinecraftCharacterModel?.HEIGHT || 2;
+    const worldPosition = new global.THREE.Vector3();
 
     for (let i = 0; i < placedBlocks.length; i++) {
       const block = placedBlocks[i];
       if (!block.visible) continue;
       if (predicate && !predicate(block)) continue;
-      const column = block.userData.terrainColumn;
+      getBlockWorldPosition(block, worldPosition);
+      const column = block.userData.terrainColumn || block.userData.instancedVoxel?.column;
       if (column && column.blocks.some((other) => other !== block
         && other.position.y > block.position.y
         && other.position.y - block.position.y <= 1.01)) continue;
 
-      const dx = block.position.x - charPos.x;
-      const dy = block.position.y - (charPos.y + characterHeight / 2);
-      const dz = block.position.z - charPos.z;
+      const dx = worldPosition.x - charPos.x;
+      const dy = worldPosition.y - (charPos.y + characterHeight / 2);
+      const dz = worldPosition.z - charPos.z;
 
       if (Math.abs(dy) > characterHeight) continue;
 
@@ -874,7 +1090,8 @@
    * Secousse visuelle d'un bloc lors d'un coup
    */
   function triggerBlockShake(block) {
-    if (block.userData.terrainInstance || block.userData.vegetationInstance) return;
+    if (block.userData.terrainInstance || block.userData.vegetationInstance
+      || block.userData.instancedVoxel) return;
     if (block.userData.isShaking) return;
     block.userData.isShaking = true;
     block.userData.origScale = block.scale.clone();
@@ -929,7 +1146,7 @@
         depthWrite: false
       });
       crackMesh = new global.THREE.Mesh(crackGeo, crackMat);
-      crackMesh.position.copy(block.position);
+      crackMesh.position.copy(getBlockWorldPosition(block));
       scene.add(crackMesh);
       block.userData.crackMesh = crackMesh;
     } else {
@@ -938,7 +1155,8 @@
     }
   }
 
-  function getBlockColors(blockDef, blockId) {
+  function getBlockColors(blockDef, blockId, block = null) {
+    if (block?.userData?.breakColors?.length) return block.userData.breakColors;
     const colors = [];
     if (blockDef && blockDef.textures) {
       const tex = blockDef.textures.top || blockDef.textures.all || blockDef.textures.side;
@@ -1001,7 +1219,8 @@
       flame.add(sprite);
       flame.userData.fireSprites.push(sprite);
     });
-    flame.position.set(block.position.x, block.position.y + 0.5, block.position.z);
+    const blockPosition = getBlockWorldPosition(block);
+    flame.position.set(blockPosition.x, blockPosition.y + 0.5, blockPosition.z);
     worldScene.add(flame);
     return flame;
   }
@@ -1147,8 +1366,8 @@
     if (!debrisGeometry) {
       debrisGeometry = new global.THREE.BoxGeometry(0.14, 0.14, 0.14);
     }
-    const colors = getBlockColors(blockDef, block.userData.blockId);
-    const origin = block.position;
+    const colors = getBlockColors(blockDef, block.userData.blockId, block);
+    const origin = getBlockWorldPosition(block);
 
     for (let i = 0; i < 4; i++) {
       const col = colors[Math.floor(Math.random() * colors.length)];
@@ -1173,6 +1392,7 @@
         rotY: (Math.random() - 0.5) * 8,
         rotZ: (Math.random() - 0.5) * 8,
         gravity: -13.0,
+        floorY: origin.y - 0.5,
         life: 0.35,
         maxLife: 0.35
       });
@@ -1183,13 +1403,14 @@
    * Animation d'explosion complète du bloc lors de sa destruction
    */
   function destroyAndExplodeBlock(block, blockDef, scene, collisionObstacles, options = {}) {
-    const origin = block.position.clone();
+    const origin = getBlockWorldPosition(block).clone();
     const blockId = block.userData.blockId || 'stone';
     const terrainColumn = block.userData.terrainColumn;
     const isTerrainBlock = Boolean(block.userData.terrainInstance);
     const isVegetationBlock = Boolean(block.userData.vegetationInstance);
+    const isInstancedVoxelBlock = Boolean(block.userData.instancedVoxel);
     const nextSupportY = block.position.y - 1;
-    const colors = getBlockColors(blockDef, blockId);
+    const colors = getBlockColors(blockDef, blockId, block);
 
     removeBlockFire(block);
     if (!options.skipSound) playMinecraftSound(blockDef?.sound || 'stone', 'break');
@@ -1208,6 +1429,8 @@
       mineableTerrain.deactivateTerrainBlock(block);
     } else if (isVegetationBlock) {
       block.userData.vegetationInstance.remove();
+    } else if (isInstancedVoxelBlock) {
+      block.userData.instancedVoxelField.removeBlock(block);
     } else {
       scene.remove(block);
     }
@@ -1218,8 +1441,8 @@
       const oIdx = collisionObstacles.indexOf(block.userData.collisionObstacle);
       if (oIdx !== -1) collisionObstacles.splice(oIdx, 1);
     }
-    if (!isTerrainBlock && block.geometry) block.geometry.dispose();
-    if (!isTerrainBlock && block.material) {
+    if (!isTerrainBlock && !isInstancedVoxelBlock && block.geometry) block.geometry.dispose();
+    if (!isTerrainBlock && !isInstancedVoxelBlock && block.material) {
       const mats = Array.isArray(block.material) ? block.material : [block.material];
       mats.forEach((material) => {
         if (!global.MinecraftBlocks?.isSharedBlockMaterial?.(material)) material.dispose();
@@ -1235,7 +1458,9 @@
 
     const debrisCount = options.debrisCount !== undefined
       ? options.debrisCount
-      : blockId === 'tnt' ? 48 : isTerrainBlock ? 8 : isVegetationBlock ? 4 : 28;
+      : blockId === 'tnt' ? 48
+        : isTerrainBlock || isInstancedVoxelBlock ? 8
+          : isVegetationBlock ? 4 : 28;
 
     for (let i = 0; i < debrisCount; i++) {
       const col = colors[Math.floor(Math.random() * colors.length)];
@@ -1265,13 +1490,14 @@
         rotY: (Math.random() - 0.5) * 12,
         rotZ: (Math.random() - 0.5) * 12,
         gravity: -14.0,
+        floorY: origin.y - 0.5,
         life: 1.3 + Math.random() * 0.3,
         maxLife: 1.6,
         initialScale
       });
     }
 
-    const dustCount = isTerrainBlock ? 3 : isVegetationBlock ? 2 : 10;
+    const dustCount = isTerrainBlock || isInstancedVoxelBlock ? 3 : isVegetationBlock ? 2 : 10;
     for (let i = 0; i < dustCount; i++) {
       const dustMat = new global.THREE.MeshBasicMaterial({
         color: 0xe6e0ed,
@@ -1299,6 +1525,7 @@
         rotY: (Math.random() - 0.5) * 2,
         rotZ: (Math.random() - 0.5) * 2,
         gravity: -1.0,
+        floorY: origin.y - 0.5,
         life: 0.75 + Math.random() * 0.25,
         maxLife: 0.9
       });
@@ -1315,8 +1542,9 @@
     if (!tntBlock || !tntBlock.visible || !worldScene) return;
     const origin = tntBlock.position.clone();
     const blastRadius = 8;
+    const testPosition = new global.THREE.Vector3();
     const affectedBlocks = placedBlocks.filter((block) =>
-      block.visible && block.position.distanceTo(origin) <= blastRadius
+      block.visible && getBlockWorldPosition(block, testPosition).distanceTo(origin) <= blastRadius
     );
     const affectedHouses = new Set();
     playMinecraftSound('tnt', 'break');
@@ -1926,8 +2154,9 @@
       m.rotation.y += p.rotY * delta;
       m.rotation.z += p.rotZ * delta;
 
-      if (m.position.y < 0.08) {
-        m.position.y = 0.08;
+      const particleFloorY = Number.isFinite(p.floorY) ? p.floorY : 0.08;
+      if (m.position.y < particleFloorY) {
+        m.position.y = particleFloorY;
         p.vy = -p.vy * 0.35;
         p.vx *= 0.65;
         p.vz *= 0.65;
@@ -1966,9 +2195,11 @@
   global.MinecraftBlockWorld = {
     spawnBlock,
     createMineableTerrain,
+    registerMineableInstancedIsland,
     registerMineableVegetation,
-    getTerrainFloorHeight: (...args) => mineableTerrain ? mineableTerrain.getFloorHeight(...args) : null,
-    collidesWithTerrain: (...args) => mineableTerrain ? mineableTerrain.collidesWithTerrain(...args) : false,
+    getTerrainFloorHeight: getWorldFloorHeight,
+    collidesWithTerrain: collidesWithTerrainFields,
+    findNearestGroundPosition,
     buildVillagerHouse,
     buildDecorativeStructures,
     addVoxelTree,

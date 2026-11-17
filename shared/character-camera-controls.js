@@ -6,6 +6,7 @@
       canvas,
       characters,
       collisionObstacles,
+      collisionEntities,
       splitToggle,
       divider,
       turnStepInput,
@@ -89,7 +90,7 @@
 
     function move(name, input) {
       const character = characters[name];
-      const otherCharacters = Object.values(characters).flat();
+      const otherCharacters = collisionEntities || Object.values(characters).flat();
       const speed = input.speed;
       if (splitMode) {
         const turnState = turnStates[name];
