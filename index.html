@@ -32,6 +32,26 @@
       z-index: 1;
     }
 
+    /* Filtre visuel intense lorsque la caméra est sous la surface de l'eau */
+    #underwater-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 5;
+      pointer-events: none;
+      opacity: 0;
+      background: radial-gradient(
+        circle at center,
+        rgba(36, 61, 144, 0.4) 0%,
+        rgba(17, 37, 107, 0.7) 100%
+      );
+      box-shadow: inset 0 0 150px rgba(10, 20, 70, 0.9);
+      transition: opacity 150ms ease-in-out;
+    }
+
+    #underwater-overlay.is-active {
+      opacity: 1;
+    }
+
     .split-camera-divider {
       position: fixed;
       top: 0;
@@ -113,7 +133,6 @@
       right: 0;
       width: min(330px, calc(100vw - 20px));
       max-height: calc(100vh - 150px);
-      max-height: calc(100dvh - 150px);
       overflow-y: auto;
       overscroll-behavior: contain;
       scrollbar-width: thin;
@@ -241,7 +260,6 @@
     .mc-btn-primary:hover {
       background: #43a047;
     }
-
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="weapons/weapon-motion.js"></script>
@@ -255,8 +273,6 @@
   <script src="characters/sheep.js"></script>
   <script src="characters/pig.js"></script>
   <script src="characters/cow.js"></script>
-
-
 </head>
 <body>
 
@@ -266,10 +282,7 @@
   </div>
 
   <div class="controls-menu">
-    <button class="controls-menu-toggle" id="controls-menu-toggle"
-      type="button" aria-expanded="false" aria-controls="controls-panel">
-      Menu
-    </button>
+    <button class="controls-menu-toggle" id="controls-menu-toggle" type="button" aria-expanded="false" aria-controls="controls-panel">Menu</button>
     <div class="controls-hint" id="controls-panel" hidden>
       <div style="color: #ffd700; margin-bottom: 3px;"><b>MISSION CHASSE AU TRÉSOR</b></div>
       <div>• L’œuf de l’Ender dragon a été volé : aidez Alex et Steve à le retrouver.</div>
@@ -286,43 +299,27 @@
       <div style="color: #ffd700; margin-bottom: 3px;">🎮 <b>COMMANDES DES PERSONNAGES</b></div>
       <div class="section-title"><span class="key-tag-alex">ALEX</span> :</div>
       <div>• Bouger : <span class="key-tag">Z</span> <span class="key-tag">Q</span> <span class="key-tag">S</span> <span class="key-tag">D</span> ou les flèches. Sauter : <span class="key-tag">V</span></div>
-      <div style="color:#c7b8d8; padding-left:20px;">En caméras séparées, ← / → (ou Q / D) tourne par pas réglables ; maintenir la touche répète la rotation.</div>
-      <div>• Sélectionner arme / bloc : <span class="key-tag">R</span> (ou clic direct sur son bandeau en bas à gauche)</div>
-      <div>• Action : touche <span class="key-tag">A</span> :</div>
-      <div style="padding-left: 10px; color: #d4f7c5;">- Avec un <b>bloc en main</b> : <b>pose le bloc en face</b> (s'empile au-dessus si un bloc existe déjà) !</div>
-      <div style="padding-left: 10px; color: #ffebaa;">- Avec une <b>arme</b> : frappe et <b>casse le bloc en face</b> (animation d'explosion & débris).</div>
-      <div style="padding-left: 10px; color: #ffb36a;">- Avec le <b>briquet</b> : allume le bois et les feuilles ; la TNT explose après 4 s dans un rayon de 8 blocs.</div>
+      <div>• Sélectionner arme / bloc : <span class="key-tag">R</span></div>
+      <div>• Action : touche <span class="key-tag">A</span> (poser bloc / casser / allumer)</div>
       <div>• Parler et gesticuler : maintenir <span class="key-tag">E</span></div>
       <div>• Créer le portail de l’End : <span class="key-tag">Y</span></div>
 
       <div class="section-title" style="margin-top: 6px;"><span class="key-tag-steve">STEVE</span> :</div>
-      <div>• Bouger : <span class="key-tag">O</span> (haut), <span class="key-tag">K</span> (gauche), <span class="key-tag">L</span> (bas), <span class="key-tag">M</span> (droite). Sauter : <span class="key-tag">N</span></div>
-      <div>• Sélectionner arme / bloc : <span class="key-tag">U</span> (ou clic direct sur son bandeau en bas à droite)</div>
-      <div>• Action : touche <span class="key-tag">I</span> :</div>
-      <div style="padding-left: 10px; color: #d4f7c5;">- Avec un <b>bloc en main</b> : <b>pose le bloc en face</b> (s'empile au-dessus si un bloc existe déjà) !</div>
-      <div style="padding-left: 10px; color: #ffebaa;">- Avec une <b>arme</b> : frappe et <b>casse le bloc en face</b> (animation d'explosion & débris).</div>
-      <div style="padding-left: 10px; color: #ffb36a;">- Avec le <b>briquet</b> : allume le bois et les feuilles ; la TNT explose après 4 s dans un rayon de 8 blocs.</div>
+      <div>• Bouger : <span class="key-tag">O</span> <span class="key-tag">K</span> <span class="key-tag">L</span> <span class="key-tag">M</span>. Sauter : <span class="key-tag">N</span></div>
+      <div>• Sélectionner arme / bloc : <span class="key-tag">U</span></div>
+      <div>• Action : touche <span class="key-tag">I</span> (poser bloc / casser / allumer)</div>
       <div>• Parler et gesticuler : maintenir <span class="key-tag">P</span></div>
-
-      <div style="color: #ffd700; margin-top: 8px;">🧱 <b>MONDE & COLLINES EN BLOCS</b></div>
-      <div>• <b>Collines de blocs :</b> terre & herbe en surface, pierres et minerais précieux (or, diamant, obsidienne) en profondeur.</div>
-      <div>• <b>Sauter & marcher sur les blocs :</b> Alex et Steve peuvent grimper aux arbres bloc par bloc.</div>
-      <div>• <b>Blocs miniatures :</b> le personnage tient en main une réplique miniature 3D du bloc sélectionné.</div>
-      <div style="margin-top: 6px;">
-        <a href="blocks/block-editor.html" target="_blank" class="mc-btn mc-btn-primary" style="display:inline-block; text-decoration:none; padding:8px 10px;">🎨 Éditeur de Blocs 3D</a>
-        <a href="vegetation/grass-editor.html" target="_blank" class="mc-btn mc-btn-primary" style="display:inline-block; text-decoration:none; padding:8px 10px;">🌿 Éditeur d’Herbe</a>
-      </div>
 
       <div style="margin-top: 8px; color: #ffd700;"><b>HISTOIRE</b></div>
       <div class="menu-actions">
         <button class="mc-btn" id="btn-replay" type="button" onclick="resetStory()">Recommencer</button>
         <button class="mc-btn mc-btn-primary" id="btn-start" type="button" onclick="startStory()">▶ Lancer le Pitch</button>
       </div>
-      <div style="margin-top: 5px; color: #a5d5ff;">• Caméra : <b>Glisser</b> pour pivoter/incliner, <b>pincement trackpad</b> pour zoomer. En écran partagé, chaque moitié contrôle sa propre caméra.</div>
     </div>
   </div>
 
   <canvas id="webgl-canvas"></canvas>
+  <div id="underwater-overlay" aria-hidden="true"></div>
   <div class="split-camera-divider" id="split-camera-divider" hidden></div>
 
   <script src="weapons/weapon-preview.js"></script>
@@ -331,7 +328,6 @@
   <script src="weapons/axe.js"></script>
   <script src="weapons/crossbow.js"></script>
   <script src="weapons/flint-and-steel.js"></script>
-  <!-- Système et Blocs de matières 3D -->
   <script src="blocks/blocks.js"></script>
   <script src="blocks/grass.js"></script>
   <script src="blocks/dirt.js"></script>
@@ -351,29 +347,31 @@
   <script src="weapons/inventory.js"></script>
   <script src="shared/character-camera-controls.js"></script>
   <script>
-    // Laisser le navigateur afficher le loader avant de construire la scène.
     requestAnimationFrame(() => requestAnimationFrame(() => {
     const pageLoader = document.getElementById('page-loader');
     let loaderDismissed = false;
-    /* ==========================================================
-       1. SCÈNE 3D & ÉCLAIRAGE
-       ========================================================== */
+    
     const isInfiniteWorld = false;
     let isSplitCameraMode = false;
     let terrain = null;
     const splitCameraToggle = document.getElementById('split-camera-toggle');
     const splitCameraDivider = document.getElementById('split-camera-divider');
     const splitTurnStepInput = document.getElementById('split-turn-step');
+    const underwaterOverlay = document.getElementById('underwater-overlay');
 
-    function getWorldUrl(fileName) {
-      const url = new URL(fileName, window.location.href);
-      return url.href;
-    }
+    function getWorldUrl(fileName) { return new URL(fileName, window.location.href).href; }
+
+    // Couleurs environnementales (Ciel vs Sous l'eau)
+    const SKY_COLOR = 0x78b8f8;
+    const SKY_FOG_DENSITY = 0.009;
+    const UNDERWATER_BG_COLOR = 0x11256b;
+    const UNDERWATER_FOG_COLOR = 0x112366;
+    const UNDERWATER_FOG_DENSITY = 0.085; // Brouillard très dense sous l'eau
 
     const canvas = document.getElementById('webgl-canvas');
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x78b8f8);
-    scene.fog = new THREE.FogExp2(0x78b8f8, 0.009);
+    scene.background = new THREE.Color(SKY_COLOR);
+    scene.fog = new THREE.FogExp2(SKY_COLOR, SKY_FOG_DENSITY);
 
     const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 1000);
     camera.position.set(0, 2.5, 8.0);
@@ -438,21 +436,17 @@
           }
         };
 
-        // Base rectangulaire et excroissances en blocs pour varier les silhouettes.
         addRectangle(-Math.floor(width / 2), -Math.floor(depth / 2), width, depth);
         const lobeCount = 2 + Math.floor(Math.random() * 3);
         for (let lobe = 0; lobe < lobeCount; lobe++) {
           const lobeWidth = 1 + Math.floor(Math.random() * 4);
           const lobeDepth = 1 + Math.floor(Math.random() * 2);
           const side = Math.random() < 0.5 ? -1 : 1;
-          const left = side < 0
-            ? -Math.floor(width / 2) - lobeWidth + 1
-            : Math.floor(width / 2) - 1;
+          const left = side < 0 ? -Math.floor(width / 2) - lobeWidth + 1 : Math.floor(width / 2) - 1;
           const back = (Math.random() < 0.5 ? -1 : 1) * Math.floor(depth / 2);
           addRectangle(left, back, lobeWidth, lobeDepth);
         }
 
-        // Chaque nuage reste sur le même niveau horizontal; seuls x et z changent.
         for (const cell of cells) {
           if (instanceIndex >= clouds.instanceMatrix.count) break;
           const [x, z] = cell.split(',').map(Number);
@@ -465,10 +459,7 @@
 
       const sky = new THREE.Group();
       sky.add(clouds);
-      const visibleSun = new THREE.Sprite(
-        new THREE.SpriteMaterial({ color: 0xffedaa, fog: false, depthWrite: false })
-      );
-      // Même azimut et même élévation que la lumière directionnelle qui projette les ombres.
+      const visibleSun = new THREE.Sprite(new THREE.SpriteMaterial({ color: 0xffedaa, fog: false, depthWrite: false }));
       visibleSun.position.set(14 * 4, 24 * 4, 12 * 4);
       visibleSun.scale.set(5, 5, 1);
       sky.add(visibleSun);
@@ -480,7 +471,6 @@
     const villager = window.MinecraftCharacters.createVillager(THREE);
     const villagerHouse = { x: 16, z: 0 };
     villager.root.position.set(villagerHouse.x, 0, 3.5);
-    villager.root.rotation.y = 0;
     scene.add(villager.root);
 
     const alex = window.MinecraftCharacters.createAlex(THREE);
@@ -503,49 +493,33 @@
 
     for (let i = 0; i < 5; i++) {
       const sheep = window.MinecraftCharacters.createSheep(THREE, {
-        woolColor: sheepColors[i], bounds: animalBounds,
-        home: { x: 16, z: 0 }, homeMinDistance: 8, homeMaxDistance: 28
+        woolColor: sheepColors[i], bounds: animalBounds, home: { x: 16, z: 0 }
       });
       sheep.root.position.set(sheepPositions[i][0], 0, sheepPositions[i][1]);
       scene.add(sheep.root);
       animals.sheep.push(sheep);
 
       const pig = window.MinecraftCharacters.createPig(THREE, {
-        skinColor: pigColors[i], bounds: animalBounds,
-        home: { x: 0, z: 0 }, homeMinDistance: 0, homeMaxDistance: 36
+        skinColor: pigColors[i], bounds: animalBounds, home: { x: 0, z: 0 }
       });
       pig.root.position.set(pigPositions[i][0], 0, pigPositions[i][1]);
       scene.add(pig.root);
       animals.pigs.push(pig);
 
       const cow = window.MinecraftCharacters.createCow(THREE, {
-        coatColor: cowColors[i], bounds: animalBounds,
-        home: { x: 0, z: 0 }, homeMinDistance: 0, homeMaxDistance: 36
+        coatColor: cowColors[i], bounds: animalBounds, home: { x: 0, z: 0 }
       });
       cow.root.position.set(cowPositions[i][0], 0, cowPositions[i][1]);
       scene.add(cow.root);
       animals.cows.push(cow);
     }
 
-
     const chickens = [];
-
     for (let i = 0; i < 4; i++) {
       const chicken = window.MinecraftCharacters.createChicken(THREE, {
-        followTarget: villager,
-        followRadius: 22,
-        bounds: {
-          minX: -52,
-          maxX: 52,
-          minZ: -52,
-          maxZ: 52
-        }
+        followTarget: villager, followRadius: 22, bounds: { minX: -52, maxX: 52, minZ: -52, maxZ: 52 }
       });
-      chicken.root.position.set(
-        villagerHouse.x + (Math.random() - 0.5) * 5,
-        0,
-        villagerHouse.z + 4 + (Math.random() - 0.5) * 5
-      );
+      chicken.root.position.set(villagerHouse.x + (Math.random() - 0.5) * 5, 0, villagerHouse.z + 4 + (Math.random() - 0.5) * 5);
       scene.add(chicken.root);
       chickens.push(chicken);
     }
@@ -553,27 +527,169 @@
 
 
     /* ==========================================================
-       3. DÉCOR ÉPURÉ
+       3. DÉCOR ÉPURÉ & EAU MINECRAFT RECTILIGNE
        ========================================================== */
     const island = window.MinecraftWorldDesign.createIsland();
     const worldRadius = island.radius;
+
+    const sceneChildrenBeforeWater = new Set(scene.children);
     const pondWater = island.addWaterMeshes(THREE, scene);
+    const waterRootObjects = scene.children.filter((obj) => !sceneChildrenBeforeWater.has(obj));
+
+    function createMinecraftWaterSystem(waterObjects, waterController) {
+      // Génération d'une texture 64x64 aléatoire (Bruit cellulaire rectiligne)
+      const texCanvas = document.createElement('canvas');
+      texCanvas.width = 64;
+      texCanvas.height = 64;
+      const ctx = texCanvas.getContext('2d');
+      const colors = ['#1e3896', '#2240a3', '#2544ad', '#2a4dc1', '#3258c7', '#3862d8'];
+
+      for (let y = 0; y < 64; y++) {
+        for (let x = 0; x < 64; x++) {
+          // Bruit simple qui crée des "taches" rectilignes
+          const noise = Math.sin(x * 0.4) + Math.cos(y * 0.4) + Math.sin((x + y) * 0.2) + Math.random();
+          let colorIdx = Math.floor(((noise + 3) / 6) * colors.length);
+          colorIdx = Math.max(0, Math.min(colors.length - 1, colorIdx));
+          ctx.fillStyle = colors[colorIdx];
+          ctx.fillRect(x, y, 1, 1);
+        }
+      }
+
+      const waterTexture = new THREE.CanvasTexture(texCanvas);
+      waterTexture.magFilter = THREE.NearestFilter; // Conserve l'aspect pixel net
+      waterTexture.minFilter = THREE.NearestFilter;
+      waterTexture.wrapS = THREE.RepeatWrapping;
+      waterTexture.wrapT = THREE.RepeatWrapping;
+
+      // DoubleSide permet de voir la surface quand on est SOUS l'eau
+      const minecraftWaterMaterial = new THREE.MeshLambertMaterial({
+        map: waterTexture,
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        depthWrite: false
+      });
+
+      let globalWaterLevel = 0; // Niveau par défaut
+      const waterZones = [];
+
+      function applyWorldBlockUVs(mesh) {
+        const geo = mesh.geometry;
+        if (!geo || !geo.attributes || !geo.attributes.position) return;
+
+        mesh.updateWorldMatrix(true, false);
+        const pos = geo.attributes.position;
+
+        // Calcule les UV pour qu'1 unité de monde = exactement 16 pixels de la texture.
+        // Puisque la texture fait 64x64, on divise par 4 pour que chaque bloc prenne 1/4 de la texture.
+        const uvArray = new Float32Array(pos.count * 2);
+        const v = new THREE.Vector3();
+        for (let i = 0; i < pos.count; i++) {
+          v.fromBufferAttribute(pos, i).applyMatrix4(mesh.matrixWorld);
+          uvArray[i * 2] = v.x / 4; 
+          uvArray[i * 2 + 1] = v.z / 4;
+        }
+        geo.setAttribute('uv', new THREE.BufferAttribute(uvArray, 2));
+        geo.attributes.uv.needsUpdate = true;
+      }
+
+      function styleWaterMeshes() {
+        waterZones.length = 0;
+        const targets = waterObjects.length ? waterObjects : scene.children;
+
+        targets.forEach((rootObj) => {
+          rootObj.traverse((child) => {
+            if (!child.isMesh) return;
+            const looksLikeWater = waterObjects.includes(rootObj) || /water|eau|pond/i.test(child.name || '') || child.userData?.isWater;
+            if (!looksLikeWater) return;
+
+            child.material = minecraftWaterMaterial;
+            child.renderOrder = 2;
+            applyWorldBlockUVs(child);
+
+            const worldBox = new THREE.Box3().setFromObject(child);
+            if (!worldBox.isEmpty()) {
+              waterZones.push({
+                minX: worldBox.min.x, maxX: worldBox.max.x,
+                minZ: worldBox.min.z, maxZ: worldBox.max.z,
+                surfaceY: worldBox.max.y
+              });
+              if (worldBox.max.y > globalWaterLevel) {
+                globalWaterLevel = worldBox.max.y;
+              }
+            }
+          });
+        });
+      }
+
+      styleWaterMeshes();
+
+      if (waterController && typeof waterController.updateColumn === 'function') {
+        const originalUpdateColumn = waterController.updateColumn.bind(waterController);
+        waterController.updateColumn = function (x, z, surfaceY) {
+          const res = originalUpdateColumn(x, z, surfaceY);
+          styleWaterMeshes();
+          return res;
+        };
+      }
+
+      let wasUnderwater = false;
+
+      function update(delta, time, activeCamera) {
+        // Animation lente non-directionnelle pour l'eau (oscillation)
+        waterTexture.offset.x = Math.sin(time * 0.2) * 0.05;
+        waterTexture.offset.y = Math.cos(time * 0.15) * 0.05;
+
+        // Récupère la position absolue de la caméra
+        const camPos = new THREE.Vector3();
+        activeCamera.getWorldPosition(camPos);
+
+        let isUnderwater = false;
+        // Vérifie si la caméra est sous le niveau global de l'eau
+        if (camPos.y <= globalWaterLevel) {
+          // Confirme avec le terrain que la colonne actuelle contient bien de l'eau en surface
+          if (typeof island.isWaterAt === 'function' && island.isWaterAt(camPos.x, camPos.z)) {
+            isUnderwater = true;
+          }
+        }
+
+        if (isUnderwater !== wasUnderwater) {
+          wasUnderwater = isUnderwater;
+          if (isUnderwater) {
+            scene.background.setHex(UNDERWATER_BG_COLOR);
+            scene.fog.color.setHex(UNDERWATER_FOG_COLOR);
+            scene.fog.density = UNDERWATER_FOG_DENSITY;
+            hemiLight.color.setHex(0x5a88e6);
+            hemiLight.groundColor.setHex(0x0c1e5c);
+            underwaterOverlay.classList.add('is-active');
+          } else {
+            scene.background.setHex(SKY_COLOR);
+            scene.fog.color.setHex(SKY_COLOR);
+            scene.fog.density = SKY_FOG_DENSITY;
+            hemiLight.color.setHex(0xffffff);
+            hemiLight.groundColor.setHex(0x55585a);
+            underwaterOverlay.classList.remove('is-active');
+          }
+        }
+      }
+
+      return { update, restyle: styleWaterMeshes };
+    }
+
+    const minecraftWater = createMinecraftWaterSystem(waterRootObjects, pondWater);
+
     const collisionObstacles = [];
     terrain = window.MinecraftBlockWorld.createMineableTerrain(THREE, scene, collisionObstacles, {
-      chunkSize: 24,
-      staticWorld: true,
-      bounds: island.bounds,
-      surfaceHeightAt: island.getSurfaceHeightAt,
-      minimumLevelAt: island.getMinimumLevelAt,
-      isWaterAt: island.isWaterAt,
-      houseAreaRadius: island.plainRadius - 9,
+      chunkSize: 24, staticWorld: true, bounds: island.bounds,
+      surfaceHeightAt: island.getSurfaceHeightAt, minimumLevelAt: island.getMinimumLevelAt,
+      isWaterAt: island.isWaterAt, houseAreaRadius: island.plainRadius - 9,
       onTerrainColumnChanged: (x, z, surfaceY) => pondWater.updateColumn(x, z, surfaceY),
       initialLayerCapacity: 2
     });
-    const getAnimalFloor = (x, z, radius, currentY) =>
-      window.MinecraftBlockWorld.getTerrainFloorHeight(x, z, radius, currentY);
-    const collidesAnimalWithTerrain = (x, z, radius, height, feetY) =>
-      window.MinecraftBlockWorld.collidesWithTerrain(x, z, radius, height, feetY);
+
+    const getAnimalFloor = (x, z, radius, currentY) => window.MinecraftBlockWorld.getTerrainFloorHeight(x, z, radius, currentY);
+    const collidesAnimalWithTerrain = (x, z, radius, height, feetY) => window.MinecraftBlockWorld.collidesWithTerrain(x, z, radius, height, feetY);
     [...animals.sheep, ...animals.pigs, ...animals.cows].forEach((animal) => {
       animal.setWorldQueries(getAnimalFloor, collidesAnimalWithTerrain);
       animal.root.position.y = terrain.getSurfaceHeightAt(animal.root.position.x, animal.root.position.z) ?? 0;
@@ -593,10 +709,7 @@
     function randomWorldPosition(centerX, centerZ, minRadius, maxRadius) {
       const angle = Math.random() * Math.PI * 2;
       const radius = minRadius + Math.random() * (maxRadius - minRadius);
-      return {
-        x: centerX + Math.cos(angle) * radius,
-        z: centerZ + Math.sin(angle) * radius
-      };
+      return { x: centerX + Math.cos(angle) * radius, z: centerZ + Math.sin(angle) * radius };
     }
 
     for (let i = 0; i < 32; i++) {
@@ -604,74 +717,27 @@
       addBirch(position.x, position.z);
     }
 
-    /* ==========================================================
-       3.1 BLOCS DE MATIÈRES 3D & CONSTRUCTIONS
-       ========================================================== */
     if (window.MinecraftBlockWorld) {
-      window.MinecraftBlockWorld.buildVillagerHouse(
-        THREE, scene, collisionObstacles, villagerHouse.x, villagerHouse.z, villagerHouse.baseY
-      );
+      window.MinecraftBlockWorld.buildVillagerHouse(THREE, scene, collisionObstacles, villagerHouse.x, villagerHouse.z, villagerHouse.baseY);
       window.MinecraftBlockWorld.buildDecorativeStructures(THREE, scene, collisionObstacles);
-      window.MinecraftBlockWorld.setupBlockInteraction(
-        THREE, scene, camera, canvas, collisionObstacles, alex, steve,
-        [alex, steve, villager, ...chickens]
-      );
+      window.MinecraftBlockWorld.setupBlockInteraction(THREE, scene, camera, canvas, collisionObstacles, alex, steve, [alex, steve, villager, ...chickens]);
     }
 
     /* ==========================================================
        4. TEXT-TO-SPEECH
        ========================================================== */
     const script = [
-      {
-        speaker: "Alex",
-        text: "L’œuf de l’Ender dragon a été volé !",
-        rate: 1.02,
-        pitch: 1.6,
-        gender: "female",
-        pose: "sad"
-      },
-      {
-        speaker: "Alex",
-        text: "L’Ender dragon a demandé mon aide et celle de Steve pour le retrouver mais nous n’y arriveront pas seul.",
-        rate: 1.0,
-        pitch: 1.5,
-        gender: "female",
-        pose: "talking"
-      },
-      {
-        speaker: "Steve",
-        text: "On a besoin d’une équipe capable de relever tous les défis !",
-        rate: 0.95,
-        pitch: 0.8,
-        gender: "male",
-        pose: "talking"
-      },
-      {
-        speaker: "Alex",
-        text: "Tia, Louise, Léa, Eva, Adam... Êtes-vous prêts à nous aider ?",
-        rate: 1.0,
-        pitch: 1.55,
-        gender: "female",
-        pose: "talking"
-      },
-      {
-        speaker: "Steve",
-        text: "Si on réussit à retrouver son œuf, il nous donnera une récompense : une partie de son trésor !",
-        rate: 1.0,
-        pitch: 0.8,
-        gender: "male",
-        pose: "talking"
-      }
+      { speaker: "Alex", text: "L’œuf de l’Ender dragon a été volé !", rate: 1.02, pitch: 1.6, gender: "female", pose: "sad" },
+      { speaker: "Alex", text: "L’Ender dragon a demandé mon aide et celle de Steve pour le retrouver mais nous n’y arriveront pas seul.", rate: 1.0, pitch: 1.5, gender: "female", pose: "talking" },
+      { speaker: "Steve", text: "On a besoin d’une équipe capable de relever tous les défis !", rate: 0.95, pitch: 0.8, gender: "male", pose: "talking" },
+      { speaker: "Alex", text: "Tia, Louise, Léa, Eva, Adam... Êtes-vous prêts à nous aider ?", rate: 1.0, pitch: 1.55, gender: "female", pose: "talking" },
+      { speaker: "Steve", text: "Si on réussit à retrouver son œuf, il nous donnera une récompense : une partie de son trésor !", rate: 1.0, pitch: 0.8, gender: "male", pose: "talking" }
     ];
 
     let voices = [];
-    function initVoices() {
-      voices = window.speechSynthesis.getVoices();
-    }
+    function initVoices() { voices = window.speechSynthesis.getVoices(); }
     initVoices();
-    if (speechSynthesis.onvoiceschanged !== undefined) {
-      speechSynthesis.onvoiceschanged = initVoices;
-    }
+    if (speechSynthesis.onvoiceschanged !== undefined) { speechSynthesis.onvoiceschanged = initVoices; }
 
     function pickVoice(gender) {
       const fr = voices.filter(v => v.lang.startsWith('fr'));
@@ -696,21 +762,9 @@
       controlsPanel.hidden = !isOpen;
     }
 
-    controlsMenuToggle.addEventListener('click', () => {
-      setControlsMenuOpen(controlsMenuToggle.getAttribute('aria-expanded') !== 'true');
-    });
-
-    document.addEventListener('click', (event) => {
-      if (!event.target.closest('.controls-menu')) {
-        setControlsMenuOpen(false);
-      }
-    });
-
-    document.addEventListener('keydown', (event) => {
-      if (event.key === 'Escape') {
-        setControlsMenuOpen(false);
-      }
-    });
+    controlsMenuToggle.addEventListener('click', () => { setControlsMenuOpen(controlsMenuToggle.getAttribute('aria-expanded') !== 'true'); });
+    document.addEventListener('click', (event) => { if (!event.target.closest('.controls-menu')) setControlsMenuOpen(false); });
+    document.addEventListener('keydown', (event) => { if (event.key === 'Escape') setControlsMenuOpen(false); });
 
     function startStory() {
       if (isStoryPlaying) return;
@@ -725,17 +779,12 @@
       window.speechSynthesis.cancel();
       isStoryPlaying = false;
       currentStep = 0;
-      alex.isTalking = false;
-      steve.isTalking = false;
+      alex.isTalking = false; steve.isTalking = false;
       alex.isSad = false;
-      alex.isArmsRaised = false;
-      alex.isNodding = false;
-      steve.isArmsRaised = false;
-      steve.isNodding = false;
-      alex.neckPivot.rotation.set(0, 0, 0);
-      steve.neckPivot.rotation.set(0, 0, 0);
-      alex.leftArmPivot.rotation.set(0, 0, 0);
-      alex.rightArmPivot.rotation.set(0, 0, 0);
+      alex.isArmsRaised = false; alex.isNodding = false;
+      steve.isArmsRaised = false; steve.isNodding = false;
+      alex.neckPivot.rotation.set(0, 0, 0); steve.neckPivot.rotation.set(0, 0, 0);
+      alex.leftArmPivot.rotation.set(0, 0, 0); alex.rightArmPivot.rotation.set(0, 0, 0);
       btnStart.innerText = "▶ Lancer le Pitch";
       btnStart.disabled = false;
     }
@@ -746,47 +795,27 @@
     function playStep() {
       if (currentStep >= script.length) {
         isStoryPlaying = false;
-        alex.isTalking = false;
-        steve.isTalking = false;
-        alex.isSad = false;
+        alex.isTalking = false; steve.isTalking = false; alex.isSad = false;
         btnStart.innerText = "▶ Rejouer le Pitch";
         btnStart.disabled = false;
         return;
       }
-
       const item = script[currentStep];
-
-      alex.isTalking = (item.speaker === "Alex");
-      steve.isTalking = (item.speaker === "Steve");
+      alex.isTalking = (item.speaker === "Alex"); steve.isTalking = (item.speaker === "Steve");
       alex.isSad = (item.pose === "sad");
 
       const utt = new SpeechSynthesisUtterance(item.text);
-      utt.lang = "fr-FR";
-      utt.rate = item.rate;
-      utt.pitch = item.pitch;
-
+      utt.lang = "fr-FR"; utt.rate = item.rate; utt.pitch = item.pitch;
       const v = pickVoice(item.gender);
       if (v) utt.voice = v;
 
-      utt.onend = () => {
-        alex.isTalking = false;
-        steve.isTalking = false;
-        currentStep++;
-        setTimeout(playStep, 700);
-      };
-
-      utt.onerror = () => {
-        alex.isTalking = false;
-        steve.isTalking = false;
-        currentStep++;
-        setTimeout(playStep, 600);
-      };
-
+      utt.onend = () => { alex.isTalking = false; steve.isTalking = false; currentStep++; setTimeout(playStep, 700); };
+      utt.onerror = () => { alex.isTalking = false; steve.isTalking = false; currentStep++; setTimeout(playStep, 600); };
       window.speechSynthesis.speak(utt);
     }
 
     /* ==========================================================
-       CONTRÔLES SOURIS & CLAVIER (TOUCHES DÉDIÉES INDÉPENDANTES)
+       CONTRÔLES SOURIS & CLAVIER
        ========================================================== */
     let camOrbit = 0;
     let cameraDistance = 8;
@@ -794,57 +823,52 @@
     let cameraPitch = Math.asin((2.5 - 1) / cameraDistance);
     const cameraTarget = new THREE.Vector3(0, 1, 0);
 
-    function updateCamera(
-      delta = 0,
-      targetX = (alex.root.position.x + steve.root.position.x) / 2,
-      targetZ = (alex.root.position.z + steve.root.position.z) / 2,
-      separation = Math.hypot(
-        alex.root.position.x - steve.root.position.x,
-        alex.root.position.z - steve.root.position.z
-      )
-    ) {
+    function updateCamera(delta = 0, targetX = (alex.root.position.x + steve.root.position.x) / 2, targetZ = (alex.root.position.z + steve.root.position.z) / 2, separation = Math.hypot(alex.root.position.x - steve.root.position.x, alex.root.position.z - steve.root.position.z)) {
       const horizontalFov = 2 * Math.atan(Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * camera.aspect);
-      const framingDistance = Math.max(
-        8,
-        (separation + 2.4) / (2 * Math.tan(horizontalFov / 2) * 0.78)
-      );
+      const framingDistance = Math.max(8, (separation + 2.4) / (2 * Math.tan(horizontalFov / 2) * 0.78));
       const desiredDistance = Math.max(cameraDistance, framingDistance);
       const followAmount = delta > 0 ? 1 - Math.exp(-5 * delta) : 1;
+      
       cameraTarget.x += (targetX - cameraTarget.x) * followAmount;
       cameraTarget.z += (targetZ - cameraTarget.z) * followAmount;
       currentCameraDistance += (desiredDistance - currentCameraDistance) * followAmount;
 
       cameraPitch = Math.max(-1.25, Math.min(1.15, cameraPitch));
       const horizontalDistance = Math.cos(cameraPitch) * currentCameraDistance;
+      const camX = cameraTarget.x + Math.sin(camOrbit) * horizontalDistance;
+      const camZ = cameraTarget.z + Math.cos(camOrbit) * horizontalDistance;
+      
+      // Calcule le sol en dessous de la caméra pour l'empêcher de passer à travers la terre sous l'eau
+      const terrainAtCam = terrain ? terrain.getSurfaceHeightAt(camX, camZ) : null;
+      const isCamOverWater = typeof island.isWaterAt === 'function' && island.isWaterAt(camX, camZ);
+      
+      // Si la caméra est au-dessus de l'eau, elle peut descendre jusqu'au fond (-12 ou hauteur du lit de la rivière + 0.25). 
+      // Sinon, elle reste à +0.5 du sol normal.
+      const minCamY = isCamOverWater
+        ? (Number.isFinite(terrainAtCam) ? terrainAtCam + 0.25 : -12)
+        : (Number.isFinite(terrainAtCam) ? terrainAtCam + 0.5 : 0.5);
+
       camera.position.set(
-        cameraTarget.x + Math.sin(camOrbit) * horizontalDistance,
-        Math.max(0.5, cameraTarget.y + Math.sin(cameraPitch) * currentCameraDistance),
-        cameraTarget.z + Math.cos(camOrbit) * horizontalDistance
+        camX,
+        Math.max(minCamY, cameraTarget.y + Math.sin(cameraPitch) * currentCameraDistance),
+        camZ
       );
-      const lookTargetY = cameraPitch < 0
-        ? camera.position.y + Math.tan(-cameraPitch) * horizontalDistance
-        : cameraTarget.y;
+      const lookTargetY = cameraPitch < 0 ? camera.position.y + Math.tan(-cameraPitch) * horizontalDistance : cameraTarget.y;
       camera.lookAt(cameraTarget.x, lookTargetY, cameraTarget.z);
     }
 
     window.addEventListener('wheel', (e) => {
       if (e.target.closest('.controls-panel')) return;
       e.preventDefault();
-      cameraDistance = Math.max(24.5, Math.min(16, cameraDistance * Math.exp(e.deltaY * 0.003)));
+      cameraDistance = Math.max(4.5, Math.min(18, cameraDistance * Math.exp(e.deltaY * 0.003)));
       updateCamera();
     }, { passive: false });
 
     const keys = {};
     const cameraControls = window.MinecraftCharacterCameraControls.create({
-      THREE,
-      renderer,
-      canvas,
-      characters: { alex, steve, villager, chickens },
-      collisionEntities,
-      collisionObstacles,
-      splitToggle: splitCameraToggle,
-      divider: splitCameraDivider,
-      turnStepInput: splitTurnStepInput,
+      THREE, renderer, canvas, characters: { alex, steve, villager, chickens },
+      collisionEntities, collisionObstacles, splitToggle: splitCameraToggle,
+      divider: splitCameraDivider, turnStepInput: splitTurnStepInput,
       onModeChange: (enabled) => { isSplitCameraMode = enabled; },
       onSingleDrag: (deltaX, deltaY) => {
         camOrbit -= deltaX * 0.005;
@@ -855,10 +879,7 @@
     let endPortal = null;
 
     function createEndPortal() {
-      [alex, steve].forEach((character) => {
-        character.root.userData.enteredPortal = false;
-        character.root.visible = true;
-      });
+      [alex, steve].forEach((character) => { character.root.userData.enteredPortal = false; character.root.visible = true; });
 
       if (endPortal) {
         scene.remove(endPortal);
@@ -880,11 +901,7 @@
       const centerX = (alex.root.position.x + steve.root.position.x) / 2;
       const centerZ = (alex.root.position.z + steve.root.position.z) / 2;
       const portal = new THREE.Group();
-      portal.position.set(
-        centerX + portalForward.x * 7,
-        0,
-        centerZ + portalForward.y * 7
-      );
+      portal.position.set(centerX + portalForward.x * 7, 0, centerZ + portalForward.y * 7);
       portal.position.x += portalForward.y * 2.5;
       portal.position.z -= portalForward.x * 2.5;
       portal.rotation.y = Math.atan2(-portalForward.x, -portalForward.y);
@@ -893,20 +910,14 @@
       const eyeMaterial = new THREE.MeshLambertMaterial({ color: 0x8b9b3c });
       const portalMaterial = new THREE.MeshBasicMaterial({ color: 0x08070d });
       const framePositions = [];
-      for (let x = -1; x <= 1; x++) {
-        framePositions.push({ x, z: -2 }, { x, z: 2 });
-      }
-      for (let z = -1; z <= 1; z++) {
-        framePositions.push({ x: -2, z }, { x: 2, z });
-      }
+      for (let x = -1; x <= 1; x++) { framePositions.push({ x, z: -2 }, { x, z: 2 }); }
+      for (let z = -1; z <= 1; z++) { framePositions.push({ x: -2, z }, { x: 2, z }); }
 
       framePositions.forEach(({ x, z }) => {
         const frame = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), frameMaterial);
         frame.position.set(x, 0.5, z);
-        frame.castShadow = true;
-        frame.receiveShadow = true;
+        frame.castShadow = true; frame.receiveShadow = true;
         portal.add(frame);
-
         const eye = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.32), eyeMaterial);
         eye.position.set(x, 1.04, z);
         eye.castShadow = true;
@@ -914,41 +925,23 @@
       });
 
       const field = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), portalMaterial);
-      field.rotation.x = -Math.PI / 2;
-      field.position.y = 1.005;
+      field.rotation.x = -Math.PI / 2; field.position.y = 1.005;
       portal.add(field);
 
-      const starPositions = [];
-      const starColors = [];
+      const starPositions = []; const starColors = [];
       const starPalette = [0x7355a6, 0x9a78d2, 0x4a668f, 0xc5b6df];
       for (let i = 0; i < 64; i++) {
-        starPositions.push(
-          (Math.random() - 0.5) * 2.9,
-          0,
-          (Math.random() - 0.5) * 2.9
-        );
+        starPositions.push((Math.random() - 0.5) * 2.9, 0, (Math.random() - 0.5) * 2.9);
         const color = new THREE.Color(starPalette[i % starPalette.length]);
         starColors.push(color.r, color.g, color.b);
       }
       const starGeometry = new THREE.BufferGeometry();
       starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starPositions, 3));
       starGeometry.setAttribute('color', new THREE.Float32BufferAttribute(starColors, 3));
-      const stars = new THREE.Points(
-        starGeometry,
-        new THREE.PointsMaterial({
-          size: 0.07,
-          vertexColors: true,
-          transparent: true,
-          opacity: 0.78,
-          sizeAttenuation: true
-        })
-      );
+      const stars = new THREE.Points(starGeometry, new THREE.PointsMaterial({ size: 0.07, vertexColors: true, transparent: true, opacity: 0.78, sizeAttenuation: true }));
       stars.position.y = 1.015;
       portal.add(stars);
-      portal.userData.field = field;
-      portal.userData.stars = stars;
-      portal.userData.armed = false;
-      portal.userData.enteredCharacters = new Set();
+      portal.userData = { field, stars, armed: false, enteredCharacters: new Set() };
       endPortal = portal;
       scene.add(endPortal);
       updateCamera();
@@ -956,9 +949,7 @@
 
     window.addEventListener('keydown', (e) => {
       const key = e.key.toLowerCase();
-      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
-        e.preventDefault();
-      }
+      if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) e.preventDefault();
       if (key === 'y' && !keys[key]) createEndPortal();
       if (!e.repeat && key === 'v') window.MinecraftCharacterModel.startJump(alex, collisionObstacles);
       if (!e.repeat && key === 'n') window.MinecraftCharacterModel.startJump(steve, collisionObstacles);
@@ -972,8 +963,7 @@
     });
     window.addEventListener('blur', () => {
       Object.keys(keys).forEach((key) => { keys[key] = false; });
-      window.MinecraftCharacterModel.stopJump(alex);
-      window.MinecraftCharacterModel.stopJump(steve);
+      window.MinecraftCharacterModel.stopJump(alex); window.MinecraftCharacterModel.stopJump(steve);
     });
 
     /* ==========================================================
@@ -983,18 +973,11 @@
     const targetFrameInterval = 1000 / 30;
     let lastFrameTime = 0;
     const worldLimit = worldRadius;
-    const respawnPositions = new Map([
-      [alex, new THREE.Vector3(-1.15, 0, 0)],
-      [steve, new THREE.Vector3(1.15, 0, 0)]
-    ]);
+    const respawnPositions = new Map([[alex, new THREE.Vector3(-1.15, 0, 0)], [steve, new THREE.Vector3(1.15, 0, 0)]]);
 
     function beginWorldFall(character) {
       if (character.fallState) return;
-      character.fallState = {
-        elapsed: 0,
-        velocityY: 0,
-        tiltDirection: character.root.position.x < 0 ? -1 : 1
-      };
+      character.fallState = { elapsed: 0, velocityY: 0, tiltDirection: character.root.position.x < 0 ? -1 : 1 };
       character.isMoving = false;
       window.MinecraftCharacterModel.stopJump(character);
       character.root.userData.jumpVelocity = 0;
@@ -1002,41 +985,26 @@
 
     function updateWorldFall(character, delta) {
       const root = character.root;
-      if (!character.fallState
-        && (Math.hypot(root.position.x, root.position.z) > worldLimit || root.position.y < -24)) {
+      if (!character.fallState && (Math.hypot(root.position.x, root.position.z) > worldLimit || root.position.y < -24)) {
         beginWorldFall(character);
       }
-
       if (!character.fallState) {
         window.MinecraftCharacterModel.updateJump(character, delta, collisionObstacles);
         return;
       }
-
-      const fall = character.fallState;
-      const step = Math.min(delta, 0.05);
-      fall.elapsed += delta;
-      fall.velocityY += 20 * step;
+      const fall = character.fallState; const step = Math.min(delta, 0.05);
+      fall.elapsed += delta; fall.velocityY += 20 * step;
       root.position.y -= fall.velocityY * step;
-      root.rotation.x += step * 0.8;
-      root.rotation.z += fall.tiltDirection * step * 0.45;
+      root.rotation.x += step * 0.8; root.rotation.z += fall.tiltDirection * step * 0.45;
 
       if (fall.elapsed >= 2) {
         const startPosition = respawnPositions.get(character);
-        const safePosition = window.MinecraftBlockWorld.findNearestGroundPosition(
-          startPosition.x,
-          startPosition.z,
-          { character, preferredY: startPosition.y, maxDistance: 80 }
-        );
+        const safePosition = window.MinecraftBlockWorld.findNearestGroundPosition(startPosition.x, startPosition.z, { character, preferredY: startPosition.y, maxDistance: 80 });
         root.position.copy(safePosition || startPosition);
-        root.rotation.x = 0;
-        root.rotation.z = 0;
-        root.userData.jumpVelocity = 0;
-        root.userData.jumpHeld = false;
+        root.rotation.set(0, 0, 0); root.userData.jumpVelocity = 0; root.userData.jumpHeld = false;
         character.isMoving = false;
-        character.leftLegPivot.rotation.x = 0;
-        character.rightLegPivot.rotation.x = 0;
-        character.leftArmPivot.rotation.set(0, 0, 0);
-        character.rightArmPivot.rotation.set(0, 0, 0);
+        character.leftLegPivot.rotation.x = 0; character.rightLegPivot.rotation.x = 0;
+        character.leftArmPivot.rotation.set(0, 0, 0); character.rightArmPivot.rotation.set(0, 0, 0);
         character.fallState = null;
       }
     }
@@ -1048,102 +1016,54 @@
       lastFrameTime = frameTime;
       const delta = Math.min(clock.getDelta(), 0.05);
       const time = clock.getElapsedTime();
-      updateWorldFall(alex, delta);
-      updateWorldFall(steve, delta);
+      updateWorldFall(alex, delta); updateWorldFall(steve, delta);
 
       if (window.MinecraftBlockWorld && window.MinecraftBlockWorld.update) {
         window.MinecraftBlockWorld.update(delta, time);
       }
 
-      // 1. Têtes et bras qui parlent
       const alexTalking = alex.isTalking || keys['e'];
       const steveTalking = steve.isTalking || keys['p'];
+      
       if (alexTalking) {
         if (alex.isSad) {
           alex.neckPivot.rotation.x = 0.42 + Math.sin(time * 9) * 0.04;
-          alex.leftArmPivot.rotation.x = -1.95;
-          alex.leftArmPivot.rotation.z = -0.32;
-          alex.rightArmPivot.rotation.x = -1.95;
-          alex.rightArmPivot.rotation.z = 0.32;
+          alex.leftArmPivot.rotation.set(-1.95, 0, -0.32); alex.rightArmPivot.rotation.set(-1.95, 0, 0.32);
         } else {
-          alex.neckPivot.rotation.x = Math.sin(time * 12) * 0.12;
-          alex.neckPivot.rotation.y = Math.cos(time * 6) * 0.08;
-          alex.leftArmPivot.rotation.x = Math.sin(time * 4) * 0.28;
-          alex.rightArmPivot.rotation.x = -Math.sin(time * 4) * 0.28;
-          alex.leftArmPivot.rotation.z = 0;
-          alex.rightArmPivot.rotation.z = 0;
+          alex.neckPivot.rotation.set(Math.sin(time * 12) * 0.12, Math.cos(time * 6) * 0.08, 0);
+          alex.leftArmPivot.rotation.set(Math.sin(time * 4) * 0.28, 0, 0); alex.rightArmPivot.rotation.set(-Math.sin(time * 4) * 0.28, 0, 0);
         }
       } else if (!alex.isMoving) {
-        alex.neckPivot.rotation.set(0, 0, 0);
-        alex.leftArmPivot.rotation.set(0, 0, 0);
-        alex.rightArmPivot.rotation.set(0, 0, 0);
+        alex.neckPivot.rotation.set(0, 0, 0); alex.leftArmPivot.rotation.set(0, 0, 0); alex.rightArmPivot.rotation.set(0, 0, 0);
       }
 
       if (steveTalking) {
-        steve.neckPivot.rotation.x = Math.sin(time * 11) * 0.13;
-        steve.neckPivot.rotation.y = Math.cos(time * 5) * 0.09;
-        steve.leftArmPivot.rotation.x = Math.sin(time * 5) * 0.32;
-        steve.rightArmPivot.rotation.x = -Math.sin(time * 5) * 0.32;
-        steve.leftArmPivot.rotation.z = 0;
-        steve.rightArmPivot.rotation.z = 0;
+        steve.neckPivot.rotation.set(Math.sin(time * 11) * 0.13, Math.cos(time * 5) * 0.09, 0);
+        steve.leftArmPivot.rotation.set(Math.sin(time * 5) * 0.32, 0, 0); steve.rightArmPivot.rotation.set(-Math.sin(time * 5) * 0.32, 0, 0);
       } else if (!steve.isMoving) {
-        steve.neckPivot.rotation.set(0, 0, 0);
-        steve.leftArmPivot.rotation.set(0, 0, 0);
-        steve.rightArmPivot.rotation.set(0, 0, 0);
+        steve.neckPivot.rotation.set(0, 0, 0); steve.leftArmPivot.rotation.set(0, 0, 0); steve.rightArmPivot.rotation.set(0, 0, 0);
       }
 
       const speed = 4.2 * delta;
       const maxCharacterSeparation = 16;
 
-      // 2. DÉPLACEMENT D'ALEX (TOUCHES Z, Q, S, D)
       let alexMoving = false;
       if (!alex.root.userData.enteredPortal && !alex.fallState) {
-        alexMoving = cameraControls.move('alex', {
-          left: keys['q'] || keys['arrowleft'],
-          right: keys['d'] || keys['arrowright'],
-          forward: keys['z'] || keys['w'] || keys['arrowup'],
-          backward: keys['s'] || keys['arrowdown'],
-          orbit: camOrbit,
-          delta,
-          speed
-        });
+        alexMoving = cameraControls.move('alex', { left: keys['q'] || keys['arrowleft'], right: keys['d'] || keys['arrowright'], forward: keys['z'] || keys['w'] || keys['arrowup'], backward: keys['s'] || keys['arrowdown'], orbit: camOrbit, delta, speed });
       }
-      alex.isMoving = alexMoving;
-      alex.isArmsRaised = !alex.root.userData.enteredPortal && keys['a'] && !alex.weaponConfig;
-      alex.isNodding = !alex.root.userData.enteredPortal && keys['a'];
+      alex.isMoving = alexMoving; alex.isArmsRaised = !alex.root.userData.enteredPortal && keys['a'] && !alex.weaponConfig; alex.isNodding = !alex.root.userData.enteredPortal && keys['a'];
 
-      // Balancement jambes et bras d'Alex
       if (alexMoving) {
         const walkFreq = time * 13;
-        alex.leftLegPivot.rotation.x = Math.sin(walkFreq) * 0.72;
-        alex.rightLegPivot.rotation.x = -Math.sin(walkFreq) * 0.72;
-        if (!alexTalking) {
-          alex.leftArmPivot.rotation.x = -Math.sin(walkFreq) * 0.65;
-          alex.rightArmPivot.rotation.x = Math.sin(walkFreq) * 0.65;
-          alex.leftArmPivot.rotation.z = 0;
-          alex.rightArmPivot.rotation.z = 0;
-        }
-      } else if (!alexTalking) {
-        alex.leftLegPivot.rotation.x = 0;
-        alex.rightLegPivot.rotation.x = 0;
-      }
+        alex.leftLegPivot.rotation.x = Math.sin(walkFreq) * 0.72; alex.rightLegPivot.rotation.x = -Math.sin(walkFreq) * 0.72;
+        if (!alexTalking) { alex.leftArmPivot.rotation.set(-Math.sin(walkFreq) * 0.65, 0, 0); alex.rightArmPivot.rotation.set(Math.sin(walkFreq) * 0.65, 0, 0); }
+      } else if (!alexTalking) { alex.leftLegPivot.rotation.x = 0; alex.rightLegPivot.rotation.x = 0; }
 
-      // 3. DÉPLACEMENT DE STEVE (TOUCHES O, K, L, M)
       let steveMoving = false;
       if (!steve.root.userData.enteredPortal && !steve.fallState) {
-        steveMoving = cameraControls.move('steve', {
-          left: keys['k'],
-          right: keys['m'],
-          forward: keys['o'],
-          backward: keys['l'],
-          orbit: camOrbit,
-          delta,
-          speed
-        });
+        steveMoving = cameraControls.move('steve', { left: keys['k'], right: keys['m'], forward: keys['o'], backward: keys['l'], orbit: camOrbit, delta, speed });
       }
-      steve.isMoving = steveMoving;
-      steve.isArmsRaised = !steve.root.userData.enteredPortal && keys['i'] && !steve.weaponConfig;
-      steve.isNodding = !steve.root.userData.enteredPortal && keys['i'];
+      steve.isMoving = steveMoving; steve.isArmsRaised = !steve.root.userData.enteredPortal && keys['i'] && !steve.weaponConfig; steve.isNodding = !steve.root.userData.enteredPortal && keys['i'];
 
       const separationX = alex.root.position.x - steve.root.position.x;
       const separationZ = alex.root.position.z - steve.root.position.z;
@@ -1153,40 +1073,27 @@
       if (!isSplitCameraMode && separation > maxCharacterSeparation && !alexHasEnteredPortal && !steveHasEnteredPortal) {
         const correction = (separation - maxCharacterSeparation) / separation;
         if (alexMoving && steveMoving) {
-          window.MinecraftCharacterModel.moveWithCollisions(
-            alex, -separationX * correction / 2, -separationZ * correction / 2, collisionObstacles, collisionEntities
-          );
-          window.MinecraftCharacterModel.moveWithCollisions(
-            steve, separationX * correction / 2, separationZ * correction / 2, collisionObstacles, collisionEntities
-          );
+          window.MinecraftCharacterModel.moveWithCollisions(alex, -separationX * correction / 2, -separationZ * correction / 2, collisionObstacles, collisionEntities);
+          window.MinecraftCharacterModel.moveWithCollisions(steve, separationX * correction / 2, separationZ * correction / 2, collisionObstacles, collisionEntities);
         } else if (alexMoving) {
-          window.MinecraftCharacterModel.moveWithCollisions(
-            alex, -separationX * correction, -separationZ * correction, collisionObstacles, collisionEntities
-          );
+          window.MinecraftCharacterModel.moveWithCollisions(alex, -separationX * correction, -separationZ * correction, collisionObstacles, collisionEntities);
         } else if (steveMoving) {
-          window.MinecraftCharacterModel.moveWithCollisions(
-            steve, separationX * correction, separationZ * correction, collisionObstacles, collisionEntities
-          );
+          window.MinecraftCharacterModel.moveWithCollisions(steve, separationX * correction, separationZ * correction, collisionObstacles, collisionEntities);
         }
       }
 
       if (endPortal) {
-        const getPortalLocalPosition = (character) => {
-          return endPortal.worldToLocal(character.root.position.clone());
-        };
+        const getPortalLocalPosition = (character) => endPortal.worldToLocal(character.root.position.clone());
         const isOnPortal = (position) => Math.abs(position.x) < 1.5 && Math.abs(position.z) < 1.5;
         const characters = [alex, steve];
-        if (!endPortal.userData.armed
-          && characters.every((character) => !isOnPortal(getPortalLocalPosition(character)))) {
+        if (!endPortal.userData.armed && characters.every((character) => !isOnPortal(getPortalLocalPosition(character)))) {
           endPortal.userData.armed = true;
         }
 
         if (endPortal.userData.armed) {
           characters.forEach((character) => {
-            if (!character.root.userData.enteredPortal
-              && isOnPortal(getPortalLocalPosition(character))) {
-              character.root.userData.enteredPortal = true;
-              character.root.visible = false;
+            if (!character.root.userData.enteredPortal && isOnPortal(getPortalLocalPosition(character))) {
+              character.root.userData.enteredPortal = true; character.root.visible = false;
               endPortal.userData.enteredCharacters.add(character);
             }
           });
@@ -1196,68 +1103,35 @@
           window.location.href = getWorldUrl('end.html');
           return;
         }
-
         endPortal.userData.stars.material.opacity = 0.6 + Math.sin(time * 2.5) * 0.18;
       }
 
-      // Balancement jambes et bras de Steve
       if (steveMoving) {
         const walkFreq = time * 13;
-        steve.leftLegPivot.rotation.x = Math.sin(walkFreq) * 0.72;
-        steve.rightLegPivot.rotation.x = -Math.sin(walkFreq) * 0.72;
-        if (!steveTalking) {
-          steve.leftArmPivot.rotation.x = -Math.sin(walkFreq) * 0.65;
-          steve.rightArmPivot.rotation.x = Math.sin(walkFreq) * 0.65;
-          steve.leftArmPivot.rotation.z = 0;
-          steve.rightArmPivot.rotation.z = 0;
-        }
-      } else if (!steveTalking) {
-        steve.leftLegPivot.rotation.x = 0;
-        steve.rightLegPivot.rotation.x = 0;
-      }
+        steve.leftLegPivot.rotation.x = Math.sin(walkFreq) * 0.72; steve.rightLegPivot.rotation.x = -Math.sin(walkFreq) * 0.72;
+        if (!steveTalking) { steve.leftArmPivot.rotation.set(-Math.sin(walkFreq) * 0.65, 0, 0); steve.rightArmPivot.rotation.set(Math.sin(walkFreq) * 0.65, 0, 0); }
+      } else if (!steveTalking) { steve.leftLegPivot.rotation.x = 0; steve.rightLegPivot.rotation.x = 0; }
 
-      // Animations déclenchées par les touches, prioritaires sur la marche.
-      if (alex.isArmsRaised) {
-        alex.leftArmPivot.rotation.x = -1.95;
-        alex.leftArmPivot.rotation.z = -0.32;
-        alex.rightArmPivot.rotation.x = -1.95;
-        alex.rightArmPivot.rotation.z = 0.32;
-      }
-      if (alex.isNodding) {
-        alex.neckPivot.rotation.x = 0.42 + Math.sin(time * 9) * 0.04;
-      } else if (!alexTalking) {
-        alex.neckPivot.rotation.set(0, 0, 0);
-      }
+      if (alex.isArmsRaised) { alex.leftArmPivot.rotation.set(-1.95, 0, -0.32); alex.rightArmPivot.rotation.set(-1.95, 0, 0.32); }
+      if (alex.isNodding) { alex.neckPivot.rotation.x = 0.42 + Math.sin(time * 9) * 0.04; } else if (!alexTalking) { alex.neckPivot.rotation.set(0, 0, 0); }
 
-      if (steve.isArmsRaised) {
-        steve.leftArmPivot.rotation.x = -1.95;
-        steve.leftArmPivot.rotation.z = -0.32;
-        steve.rightArmPivot.rotation.x = -1.95;
-        steve.rightArmPivot.rotation.z = 0.32;
-      }
-      if (steve.isNodding) {
-        steve.neckPivot.rotation.x = 0.42 + Math.sin(time * 9) * 0.04;
-      } else if (!steveTalking) {
-        steve.neckPivot.rotation.set(0, 0, 0);
-      }
+      if (steve.isArmsRaised) { steve.leftArmPivot.rotation.set(-1.95, 0, -0.32); steve.rightArmPivot.rotation.set(-1.95, 0, 0.32); }
+      if (steve.isNodding) { steve.neckPivot.rotation.x = 0.42 + Math.sin(time * 9) * 0.04; } else if (!steveTalking) { steve.neckPivot.rotation.set(0, 0, 0); }
 
-      window.MinecraftCharacterModel.updateWeaponArm(alex, delta, time);
-      window.MinecraftCharacterModel.updateWeaponArm(steve, delta, time);
+      window.MinecraftCharacterModel.updateWeaponArm(alex, delta, time); window.MinecraftCharacterModel.updateWeaponArm(steve, delta, time);
 
       const targetX = (alex.root.position.x + steve.root.position.x) / 2;
       const targetZ = (alex.root.position.z + steve.root.position.z) / 2;
-      const characterSeparation = Math.hypot(
-        alex.root.position.x - steve.root.position.x,
-        alex.root.position.z - steve.root.position.z
-      );
-      updateCamera(delta, targetX, targetZ, characterSeparation);
+      updateCamera(delta, targetX, targetZ, separation);
       camera.updateMatrixWorld();
+
+      // Mise à jour de l'eau (Animation et Filtre d'écran)
+      minecraftWater.update(delta, time, camera);
 
       terrain.updateCenter(targetX, targetZ);
       cloudLayer.position.set(targetX, 0, targetZ);
       sun.target.position.set(targetX, 0, targetZ);
       sun.position.set(targetX + 14, 24, targetZ + 12);
-
       vegetation.update(delta, targetX, targetZ, isInfiniteWorld, camera);
 
       const renderWidth = canvas.clientWidth || window.innerWidth;
@@ -1267,39 +1141,21 @@
         renderer.setViewport(0, 0, renderWidth, renderHeight);
         renderer.render(scene, camera);
       }
+      
       if (pageLoader && !loaderDismissed) {
         loaderDismissed = true;
         pageLoader.classList.add('is-hidden');
         setTimeout(() => pageLoader.remove(), 350);
       }
-      // Liste des entités utilisées pour les collisions des poulets.
-      chickens.forEach((chicken) => {
-        chicken.update(delta, collisionObstacles, collisionEntities);
-      });
-      [...animals.sheep, ...animals.pigs, ...animals.cows].forEach((animal) => {
-        animal.update(delta, collisionObstacles, collisionEntities);
-      });
-      window.MinecraftBlockWorld.updateCharacterHitReactions(delta);
 
+      chickens.forEach((chicken) => chicken.update(delta, collisionObstacles, collisionEntities));
+      [...animals.sheep, ...animals.pigs, ...animals.cows].forEach((animal) => animal.update(delta, collisionObstacles, collisionEntities));
+      window.MinecraftBlockWorld.updateCharacterHitReactions(delta);
     }
 
-
-
-
     renderLoop(0);
-    document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) {
-        clock.getDelta();
-        lastFrameTime = 0;
-        requestAnimationFrame(renderLoop);
-      }
-    });
-
-    window.addEventListener('resize', () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) { clock.getDelta(); lastFrameTime = 0; requestAnimationFrame(renderLoop); } });
+    window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
     }));
   </script>
 </body>
